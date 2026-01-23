@@ -128,8 +128,17 @@ export default function PlansPage() {
   }
 
   async function createOrUpdateScheme() {
-    if (!profile?.retailer_id || !newScheme.name || !newScheme.installment_amount || !newScheme.duration_months) {
-      toast.error('Please fill in all required fields');
+    console.log('createOrUpdateScheme called', { profile, newScheme });
+    
+    if (!profile?.retailer_id) {
+      console.error('No retailer_id');
+      toast.error('Missing retailer context');
+      return;
+    }
+    
+    if (!newScheme.name || !newScheme.installment_amount || !newScheme.duration_months) {
+      console.error('Missing required fields', { newScheme });
+      toast.error('Please fill in all required fields (Name, Amount, Duration)');
       return;
     }
 
@@ -137,7 +146,10 @@ export default function PlansPage() {
     const durationMonths = parseInt(newScheme.duration_months);
     const bonusPercentage = newScheme.bonus_percentage ? parseFloat(newScheme.bonus_percentage) : 0;
 
+    console.log('Parsed values:', { installmentAmount, durationMonths, bonusPercentage });
+
     if (!Number.isFinite(installmentAmount) || installmentAmount <= 0 || !Number.isFinite(durationMonths) || durationMonths <= 0) {
+      console.error('Invalid numbers');
       toast.error('Please enter valid positive numbers');
       return;
     }
@@ -154,33 +166,48 @@ export default function PlansPage() {
         is_active: true,
       };
 
+      console.log('Submitting scheme data:', schemeData);
+
       if (editingId) {
+        console.log('Updating existing plan:', editingId);
         const { error } = await supabase
           .from('scheme_templates')
           .update(schemeData)
           .eq('id', editingId)
           .eq('retailer_id', profile.retailer_id);
 
-        if (error) throw error;
+        if (error) {
+          console.error('Update error:', error);
+          throw error;
+        }
         toast.success(`Plan updated: ${newScheme.name}`);
       } else {
-        const { error } = await supabase
+        console.log('Creating new plan');
+        const { data, error } = await supabase
           .from('scheme_templates')
-          .insert(schemeData)
+          .insert([schemeData])
           .select('id')
           .single();
 
-        if (error) throw error;
-        toast.success(`Plan created: ${newScheme.name}`);
+        if (error) {
+          console.error('Insert error:', error);
+          throw error;
+        }
+        console.log('Plan created successfully:', data);
+        toast.success(`✅ Plan created: ${newScheme.name}`);
       }
 
       setNewScheme({ name: '', installment_amount: '', duration_months: '', bonus_percentage: '', description: '' });
       setEditingId(null);
       setDialogOpen(false);
+      console.log('Reloading schemes after save...');
       await loadSchemes();
+      console.log('Schemes reloaded');
     } catch (error: any) {
       console.error('Error saving scheme:', error);
-      toast.error(error?.message || 'Failed to save plan');
+      const errorMsg = error?.message || error?.toString() || 'Failed to save plan';
+      console.error('Final error message:', errorMsg);
+      toast.error(`Error: ${errorMsg}`);
     } finally {
       setSaving(false);
     }
@@ -302,12 +329,16 @@ export default function PlansPage() {
               </div>
 
               <Button
-                className="w-full gold-gradient text-white"
-                onClick={createOrUpdateScheme}
+                className="w-full gold-gradient text-white font-semibold"
+                onClick={(e) => {
+                  e.preventDefault();
+                  console.log('Button clicked, saving:', saving);
+                  void createOrUpdateScheme();
+                }}
                 disabled={saving}
                 type="button"
               >
-                {editingId ? 'Update Plan' : 'Create Plan'}
+                {saving ? 'Creating...' : editingId ? 'Update Plan' : 'Create Plan'}
               </Button>
             </div>
           </DialogContent>

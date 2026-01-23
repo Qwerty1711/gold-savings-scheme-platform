@@ -18,15 +18,12 @@ import { useAuth } from '@/lib/contexts/auth-context';
 
 type Plan = {
   id: string;
-  plan_name: string;
-  monthly_amount: number;
-  tenure_months: number;
-  karat: string;
-  terms: string | null;
+  name: string;
+  installment_amount: number;
+  duration_months: number;
+  bonus_percentage: number;
+  description?: string | null;
   is_active: boolean;
-  min_commitment_override: number | null;
-  max_commitment_override: number | null;
-  presets_override: number[] | null;
 };
 
 type StaffMember = {
@@ -102,20 +99,19 @@ export default function EnrollmentWizard() {
     try {
       const [plansResult, staffResult] = await Promise.all([
         supabase
-          .from('plans')
+          .from('scheme_templates')
           .select(
-            'id, plan_name, monthly_amount, tenure_months, karat, terms, is_active, min_commitment_override, max_commitment_override, presets_override'
+            'id, name, installment_amount, duration_months, bonus_percentage, description, is_active'
           )
           .eq('retailer_id', profile!.retailer_id)
           .eq('is_active', true)
-          .order('monthly_amount', { ascending: true }),
+          .order('installment_amount', { ascending: true }),
 
         supabase
           .from('user_profiles')
           .select('id, full_name')
           .eq('retailer_id', profile!.retailer_id)
-          .in('role', ['ADMIN', 'STAFF'])
-          .eq('status', 'active'),
+          .in('role', ['ADMIN', 'STAFF']),
       ]);
 
       if (plansResult.error) throw plansResult.error;
@@ -179,17 +175,12 @@ export default function EnrollmentWizard() {
   }
 
   function getMinCommitment(plan: Plan): number {
-    // plan monthly_amount is baseline; min_commitment_override can override
-    const base = safeNumber(plan.monthly_amount);
-    const minOverride = safeNumber(plan.min_commitment_override);
-    return minOverride > 0 ? minOverride : base;
+    // scheme_templates: installment_amount is the monthly commitment
+    return safeNumber(plan.installment_amount);
   }
 
   function getPresets(plan: Plan): number[] {
-    const presets = (plan.presets_override || []).map((x) => safeNumber(x)).filter((x) => x > 0);
-    if (presets.length > 0) return presets;
-
-    // reasonable defaults based on min
+    // Generate preset amounts based on installment_amount
     const min = getMinCommitment(plan);
     const p1 = Math.ceil(min / 1000) * 1000;
     return [p1, p1 + 2000, p1 + 5000, p1 + 10000];
@@ -217,12 +208,7 @@ export default function EnrollmentWizard() {
       return;
     }
 
-    // optional upper bound
-    const maxCommitment = safeNumber(plan.max_commitment_override);
-    if (maxCommitment > 0 && amount > maxCommitment) {
-      toast.error(`Commitment must be at most ₹${maxCommitment.toLocaleString()}`);
-      return;
-    }
+    // Note: max_commitment_override removed (using scheme_templates now)
 
     setLoading(true);
 
@@ -251,7 +237,7 @@ export default function EnrollmentWizard() {
       startDate.setHours(0, 0, 0, 0);
 
       const billingDay = startDate.getDate();
-      const maturity = new Date(startDate.getFullYear(), startDate.getMonth() + safeNumber(plan.tenure_months), startDate.getDate());
+      const maturity = new Date(startDate.getFullYear(), startDate.getMonth() + safeNumber(plan.duration_months), startDate.getDate());
       maturity.setHours(0, 0, 0, 0);
 
       const { data: enrollment, error: enrollErr } = await supabase
@@ -430,14 +416,14 @@ export default function EnrollmentWizard() {
                       <div className="ml-3 flex-1">
                         <div className="flex items-start justify-between">
                           <div>
-                            <p className="font-semibold">{plan.plan_name}</p>
-                            {plan.terms && <p className="text-sm text-muted-foreground">{plan.terms}</p>}
+                            <p className="font-semibold">{plan.name}</p>
+                            {plan.description && <p className="text-sm text-muted-foreground">{plan.description}</p>}
                           </div>
-                          <Badge variant="outline">{plan.karat}</Badge>
+                          <Badge variant="outline">{plan.duration_months}m</Badge>
                         </div>
                         <div className="mt-2 space-y-1">
                           <p className="text-sm text-muted-foreground">
-                            {plan.tenure_months} months • Min: ₹{getMinCommitment(plan).toLocaleString()}/mo
+                            {plan.duration_months} months • ₹{getMinCommitment(plan).toLocaleString()}/month • {plan.bonus_percentage}% bonus
                           </p>
                         </div>
                       </div>
