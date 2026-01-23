@@ -461,7 +461,7 @@ export default function SchemesPage() {
             </Dialog>
           );
         })}
-      </div>
+        </div>
 
       {filtered.length === 0 && (
         <Card className="p-12">
