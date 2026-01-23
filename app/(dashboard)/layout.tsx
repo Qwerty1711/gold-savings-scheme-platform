@@ -34,7 +34,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-gold-50/5 to-background sparkle-bg">
+    <div className="min-h-screen bg-gradient-to-br from-background to-gold-50/10">
       <TopBar />
 
       <div className="flex flex-col items-center py-6">

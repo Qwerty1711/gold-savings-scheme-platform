@@ -179,7 +179,6 @@
       hsl(var(--gold-500)) 75%,
       hsl(var(--gold-400)) 100%);
     background-size: 200% 100%;
-    animation: premium-shimmer 4s ease-in-out infinite;
   }
 
   .gold-gradient {
@@ -197,7 +196,6 @@
       hsl(var(--gold-400)) 75%,
       hsl(var(--gold-300)) 100%);
     background-size: 200% 200%;
-    animation: shimmer 3s ease-in-out infinite;
   }
 
   .jewel-gradient {
@@ -424,12 +422,21 @@
   }
 
   .skeleton {
-    @apply animate-pulse bg-gradient-to-r from-muted via-muted/50 to-muted rounded;
+    @apply bg-gradient-to-r from-muted via-muted/50 to-muted rounded;
   }
 
-  /* Smooth transitions */
-  * {
-    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  /* Targeted transitions - only on interactive elements for better performance */
+  button, a, input, select, textarea {
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+
+  /* Reduced motion for better accessibility */
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 

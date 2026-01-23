@@ -66,22 +66,17 @@ export default function PulseDashboard() {
   }, [profile?.retailer_id]);
 
   async function safeCountCustomers(retailerId: string): Promise<number> {
-    // Some DBs have customers.status, some don’t. Try with status, fallback without.
-    const withStatus = await supabase
-      .from('customers')
-      .select('id', { count: 'exact', head: true })
-      .eq('retailer_id', retailerId)
-      .eq('status', 'active');
-
-    if (!withStatus.error) return withStatus.count || 0;
-
-    const withoutStatus = await supabase
+    // Just count all customers - we'll assume the status field may or may not exist
+    const { count, error } = await supabase
       .from('customers')
       .select('id', { count: 'exact', head: true })
       .eq('retailer_id', retailerId);
 
-    if (withoutStatus.error) throw withoutStatus.error;
-    return withoutStatus.count || 0;
+    if (error) {
+      console.error('Error counting customers:', error);
+      return 0;
+    }
+    return count || 0;
   }
 
   async function loadDashboard() {

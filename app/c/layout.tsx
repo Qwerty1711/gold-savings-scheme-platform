@@ -193,7 +193,7 @@ export default function CustomerWalletPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-background via-gold-50/10 to-background sparkle-bg">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-background to-gold-50/10">
         <div className="text-center space-y-4">
           <div className="w-16 h-16 rounded-full jewel-gradient animate-pulse mx-auto flex items-center justify-center">
             <Gem className="w-8 h-8 text-white" />
@@ -205,8 +205,8 @@ export default function CustomerWalletPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-gold-50/10 to-background sparkle-bg">
-      <div className="sticky top-0 z-50 backdrop-blur-xl bg-white/80 dark:bg-zinc-900/80 border-b border-gold-200/30 dark:border-gold-600/30">
+    <div className="min-h-screen bg-gradient-to-br from-background to-gold-50/10">
+      <div className="sticky top-0 z-50 backdrop-blur-lg bg-white/80 dark:bg-zinc-900/80 border-b border-gold-200/30 dark:border-gold-600/30">
         <div className="flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl jewel-gradient flex items-center justify-center">
