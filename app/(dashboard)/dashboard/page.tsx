@@ -85,10 +85,15 @@ export default function SchemesPage() {
   }, [profile?.retailer_id]);
 
   async function loadEnrollments() {
-    if (!profile?.retailer_id) return;
+    if (!profile?.retailer_id) {
+      console.log('No retailer_id found:', { profile });
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     try {
+      console.log('Loading enrollments for retailer:', profile.retailer_id);
       const { data, error } = await supabase
         .from('enrollments')
         .select(`
@@ -118,8 +123,12 @@ export default function SchemesPage() {
         .eq('retailer_id', profile.retailer_id)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
 
+      console.log('Enrollments loaded:', data);
       setEnrollments((data || []) as Enrollment[]);
     } catch (err) {
       console.error('Error loading enrollments:', err);
