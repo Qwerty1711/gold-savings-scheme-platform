@@ -7,11 +7,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/contexts/auth-context';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Settings, Users, Lock, Bell, LogOut, Trash2, Plus } from 'lucide-react';
+import { Settings, Users, Lock, Bell, LogOut, Trash2, Plus, Store, TrendingUp, Edit } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -40,15 +41,32 @@ type StaffMember = {
   phone?: string | null;
   employee_id?: string | null;
   role: string;
+  store_id?: string | null;
+  created_at: string;
+  stores?: { name: string } | null;
+};
+
+type StoreLocation = {
+  id: string;
+  name: string;
+  code?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  phone?: string | null;
+  is_active: boolean;
   created_at: string;
 };
 
-type AuditLog = {
+type RateHistory = {
   id: string;
-  action: string;
-  details: string;
-  created_by: string;
+  karat: string;
+  rate_per_gram: number;
+  effective_from: string;
   created_at: string;
+  updated_by_name?: string | null;
+  previous_rate?: number | null;
+  change_percentage?: number | null;
 };
 
 export default function SettingsPage() {
@@ -56,15 +74,29 @@ export default function SettingsPage() {
   const router = useRouter();
   const [retailerSettings, setRetailerSettings] = useState<RetailerSettings | null>(null);
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [stores, setStores] = useState<StoreLocation[]>([]);
+  const [rateHistory, setRateHistory] = useState<RateHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingRetailer, setSavingRetailer] = useState(false);
+  
+  // Staff dialog state
   const [addStaffDialog, setAddStaffDialog] = useState(false);
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffEmail, setNewStaffEmail] = useState('');
   const [newStaffPhone, setNewStaffPhone] = useState('');
   const [newStaffEmployeeId, setNewStaffEmployeeId] = useState('');
+  const [newStaffStoreId, setNewStaffStoreId] = useState('');
   const [addingStaff, setAddingStaff] = useState(false);
+  
+  // Store dialog state
+  const [addStoreDialog, setAddStoreDialog] = useState(false);
+  const [newStoreName, setNewStoreName] = useState('');
+  const [newStoreCode, setNewStoreCode] = useState('');
+  const [newStoreAddress, setNewStoreAddress] = useState('');
+  const [newStoreCity, setNewStoreCity] = useState('');
+  const [newStoreState, setNewStoreState] = useState('');
+  const [newStorePhone, setNewStorePhone] = useState('');
+  const [addingStore, setAddingStore] = useState(false);
 
   // Only ADMIN can access Settings
   useEffect(() => {
@@ -93,31 +125,36 @@ export default function SettingsPage() {
       if (retailerError) throw retailerError;
       setRetailerSettings(retailerData);
 
-      // Load staff members
+      // Load staff members with store info
       const { data: staffData, error: staffError } = await supabase
         .from('user_profiles')
-        .select('id, full_name, email, phone, employee_id, role, created_at')
+        .select('id, full_name, email, phone, employee_id, role, store_id, created_at, stores(name)')
         .eq('retailer_id', profile.retailer_id)
         .order('created_at', { ascending: false });
 
       if (staffError) throw staffError;
       setStaffMembers(staffData || []);
 
-      // Load audit logs (if table exists)
-      try {
-        const { data: logsData, error: logsError } = await supabase
-          .from('audit_logs')
-          .select('*')
-          .eq('retailer_id', profile.retailer_id)
-          .order('created_at', { ascending: false })
-          .limit(50);
+      // Load stores
+      const { data: storesData, error: storesError} = await supabase
+        .from('stores')
+        .select('*')
+        .eq('retailer_id', profile.retailer_id)
+        .order('created_at', { ascending: true });
 
-        if (!logsError) {
-          setAuditLogs(logsData || []);
-        }
-      } catch {
-        // Audit logs table may not exist yet
-        setAuditLogs([]);
+      if (storesError) throw storesError;
+      setStores(storesData || []);
+
+      // Load rate history
+      const { data: rateData, error: rateError } = await supabase
+        .rpc('get_rate_history', {
+          p_retailer_id: profile.retailer_id,
+          p_karat: null, // Get all karats
+          p_limit: 50
+        });
+
+      if (!rateError && rateData) {
+        setRateHistory(rateData || []);
       }
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -132,28 +169,23 @@ export default function SettingsPage() {
 
     setSavingRetailer(true);
     try {
-      const payload: Record<string, any> = {};
-      const nameValue = retailerSettings.name || (retailerSettings as any).business_name;
-      if (nameValue !== undefined) {
-        payload.name = nameValue;
-        payload.business_name = nameValue;
-      }
-      if ('email' in retailerSettings || 'contact_email' in (retailerSettings as any)) {
-        payload.email = retailerSettings.email;
-        payload.contact_email = (retailerSettings as any).email ?? (retailerSettings as any).contact_email;
-      }
-      if ('phone' in retailerSettings) payload.phone = retailerSettings.phone;
-      if ('address' in retailerSettings) payload.address = retailerSettings.address;
-      if ('city' in retailerSettings) payload.city = retailerSettings.city;
-      if ('state' in retailerSettings) payload.state = retailerSettings.state;
-
       const { error } = await supabase
         .from('retailers')
-        .update(payload)
+        .update({
+          name: retailerSettings.name,
+          business_name: retailerSettings.name,
+          email: retailerSettings.email,
+          contact_email: retailerSettings.email,
+          phone: retailerSettings.phone,
+          address: retailerSettings.address,
+          city: retailerSettings.city,
+          state: retailerSettings.state,
+        })
         .eq('id', profile.retailer_id);
 
       if (error) throw error;
-      toast.success('Retailer settings updated successfully');
+      toast.success('✅ Retailer settings saved');
+      await loadSettings();
     } catch (error: any) {
       console.error('Error updating settings:', error);
       toast.error(error?.message || 'Failed to update settings');
@@ -174,21 +206,26 @@ export default function SettingsPage() {
 
     setAddingStaff(true);
     try {
+      // Note: This creates a user_profile WITHOUT auth.users entry
+      // In production, you'd create auth user first, then profile
       const { error } = await supabase.from('user_profiles').insert({
         retailer_id: profile.retailer_id,
         full_name: newStaffName,
         email: newStaffEmail,
         phone: newStaffPhone || null,
         employee_id: newStaffEmployeeId || null,
+        store_id: newStaffStoreId || null,
         role: 'STAFF',
+        status: 'ACTIVE',
       });
 
       if (error) throw error;
-      toast.success('Staff member added');
+      toast.success('✅ Staff member added');
       setNewStaffName('');
       setNewStaffEmail('');
       setNewStaffPhone('');
       setNewStaffEmployeeId('');
+      setNewStaffStoreId('');
       setAddStaffDialog(false);
       await loadSettings();
     } catch (error: any) {
@@ -210,11 +247,69 @@ export default function SettingsPage() {
         .eq('retailer_id', profile?.retailer_id);
 
       if (error) throw error;
-      toast.success('Staff member removed');
+      toast.success('✅ Staff member removed');
       await loadSettings();
     } catch (error: any) {
       console.error('Error removing staff:', error);
       toast.error(error?.message || 'Failed to remove staff member');
+    }
+  }
+
+  async function addStore() {
+    if (!profile?.retailer_id) {
+      toast.error('Missing retailer context');
+      return;
+    }
+    if (!newStoreName) {
+      toast.error('Store name is required');
+      return;
+    }
+
+    setAddingStore(true);
+    try {
+      const { error } = await supabase.from('stores').insert({
+        retailer_id: profile.retailer_id,
+        name: newStoreName,
+        code: newStoreCode || null,
+        address: newStoreAddress || null,
+        city: newStoreCity || null,
+        state: newStoreState || null,
+        phone: newStorePhone || null,
+        is_active: true,
+      });
+
+      if (error) throw error;
+      toast.success('✅ Store location added');
+      setNewStoreName('');
+      setNewStoreCode('');
+      setNewStoreAddress('');
+      setNewStoreCity('');
+      setNewStoreState('');
+      setNewStorePhone('');
+      setAddStoreDialog(false);
+      await loadSettings();
+    } catch (error: any) {
+      console.error('Error adding store:', error);
+      toast.error(error?.message || 'Failed to add store');
+    } finally {
+      setAddingStore(false);
+    }
+  }
+
+  async function toggleStoreStatus(storeId: string, currentStatus: boolean) {
+    try {
+      const { error } = await supabase
+        .from('stores')
+        .update({ is_active: !currentStatus })
+        .eq('id', storeId)
+        .eq('retailer_id', profile?.retailer_id);
+
+      if (error) throw error;
+      toast.success(`✅ Store ${!currentStatus ? 'activated' : 'deactivated'}`);
+      await loadSettings();
+    } catch (error: any) {
+      console.error('Error toggling store:', error);
+      toast.error(error?.message || 'Failed to update store');
     }
   }
 
@@ -247,22 +342,26 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="retailer" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="retailer" className="flex items-center gap-2">
             <Settings className="w-4 h-4" />
             <span className="hidden sm:inline">Retailer</span>
+          </TabsTrigger>
+          <TabsTrigger value="stores" className="flex items-center gap-2">
+            <Store className="w-4 h-4" />
+            <span className="hidden sm:inline">Stores</span>
           </TabsTrigger>
           <TabsTrigger value="staff" className="flex items-center gap-2">
             <Users className="w-4 h-4" />
             <span className="hidden sm:inline">Staff</span>
           </TabsTrigger>
+          <TabsTrigger value="audit" className="flex items-center gap-2">
+            <TrendingUp className="w-4 h-4" />
+            <span className="hidden sm:inline">Rate Audit</span>
+          </TabsTrigger>
           <TabsTrigger value="security" className="flex items-center gap-2">
             <Lock className="w-4 h-4" />
             <span className="hidden sm:inline">Security</span>
-          </TabsTrigger>
-          <TabsTrigger value="audit" className="flex items-center gap-2">
-            <Bell className="w-4 h-4" />
-            <span className="hidden sm:inline">Audit</span>
           </TabsTrigger>
         </TabsList>
 
@@ -353,19 +452,110 @@ export default function SettingsPage() {
               </Button>
             </CardContent>
           </Card>
+        </TabsContent>
 
-          <Card className="bg-primary/5 border-primary/20">
-            <CardHeader>
-              <CardTitle className="text-base">Payment Configuration</CardTitle>
-              <CardDescription>Coming soon: Configure payment methods and thresholds</CardDescription>
+        {/* Stores Management Tab */}
+        <TabsContent value="stores" className="space-y-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Store Locations</CardTitle>
+                <CardDescription>Manage your physical store locations</CardDescription>
+              </div>
+              <Dialog open={addStoreDialog} onOpenChange={setAddStoreDialog}>
+                <DialogTrigger asChild>
+                  <Button className="gold-gradient text-white">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Store
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Add Store Location</DialogTitle>
+                    <DialogDescription>Create a new physical store location</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label>Store Name *</Label>
+                      <Input value={newStoreName} onChange={(e) => setNewStoreName(e.target.value)} placeholder="Main Branch" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Store Code</Label>
+                      <Input value={newStoreCode} onChange={(e) => setNewStoreCode(e.target.value)} placeholder="MAIN" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Address</Label>
+                      <Input value={newStoreAddress} onChange={(e) => setNewStoreAddress(e.target.value)} placeholder="Street address" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-2">
+                        <Label>City</Label>
+                        <Input value={newStoreCity} onChange={(e) => setNewStoreCity(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>State</Label>
+                        <Input value={newStoreState} onChange={(e) => setNewStoreState(e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Phone</Label>
+                      <Input value={newStorePhone} onChange={(e) => setNewStorePhone(e.target.value)} />
+                    </div>
+                    <div className="flex justify-end gap-2 pt-2">
+                      <Button variant="ghost" onClick={() => setAddStoreDialog(false)}>
+                        Cancel
+                      </Button>
+                      <Button className="gold-gradient text-white" onClick={addStore} disabled={addingStore}>
+                        {addingStore ? 'Adding...' : 'Add Store'}
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </CardHeader>
-          </Card>
-
-          <Card className="bg-primary/5 border-primary/20">
-            <CardHeader>
-              <CardTitle className="text-base">Notification Settings</CardTitle>
-              <CardDescription>Coming soon: Configure system-wide alerts and notifications</CardDescription>
-            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {stores.length > 0 ? (
+                  stores.map((store) => (
+                    <div
+                      key={store.id}
+                      className="flex items-start justify-between p-4 rounded-lg glass-card border border-border"
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-medium">{store.name}</h3>
+                          {store.code && (
+                            <Badge variant="outline" className="text-xs">{store.code}</Badge>
+                          )}
+                          <Badge variant={store.is_active ? 'default' : 'secondary'}>
+                            {store.is_active ? 'Active' : 'Inactive'}
+                          </Badge>
+                        </div>
+                        {(store.address || store.city || store.state) && (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {[store.address, store.city, store.state].filter(Boolean).join(', ')}
+                          </p>
+                        )}
+                        {store.phone && (
+                          <p className="text-xs text-muted-foreground">📞 {store.phone}</p>
+                        )}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => toggleStoreStatus(store.id, store.is_active)}
+                      >
+                        {store.is_active ? 'Deactivate' : 'Activate'}
+                      </Button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-center text-muted-foreground py-8">
+                    No stores added yet. Add your first store location.
+                  </p>
+                )}
+              </div>
+            </CardContent>
           </Card>
         </TabsContent>
 
@@ -375,7 +565,7 @@ export default function SettingsPage() {
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle>Staff Management</CardTitle>
-                <CardDescription>Manage team members and permissions</CardDescription>
+                <CardDescription>Manage team members and assign to stores</CardDescription>
               </div>
               <Dialog open={addStaffDialog} onOpenChange={setAddStaffDialog}>
                 <DialogTrigger asChild>
@@ -406,6 +596,22 @@ export default function SettingsPage() {
                       <Label>Employee ID</Label>
                       <Input value={newStaffEmployeeId} onChange={(e) => setNewStaffEmployeeId(e.target.value)} />
                     </div>
+                    <div className="space-y-2">
+                      <Label>Assign to Store</Label>
+                      <Select value={newStaffStoreId} onValueChange={setNewStaffStoreId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select store (optional)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">No store assignment</SelectItem>
+                          {stores.filter(s => s.is_active).map(store => (
+                            <SelectItem key={store.id} value={store.id}>
+                              {store.name} {store.code ? `(${store.code})` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <div className="flex justify-end gap-2 pt-2">
                       <Button variant="ghost" onClick={() => setAddStaffDialog(false)}>
                         Cancel
@@ -429,11 +635,13 @@ export default function SettingsPage() {
                       <div className="flex-1">
                         <h3 className="font-medium">{staff.full_name}</h3>
                         <p className="text-sm text-muted-foreground">{staff.email}</p>
-                        {(staff.phone || staff.employee_id) && (
+                        {(staff.phone || staff.employee_id || staff.stores) && (
                           <p className="text-xs text-muted-foreground">
                             {staff.phone ? `${staff.phone}` : ''}
                             {staff.phone && staff.employee_id ? ' • ' : ''}
                             {staff.employee_id ? `ID: ${staff.employee_id}` : ''}
+                            {(staff.phone || staff.employee_id) && staff.stores ? ' • ' : ''}
+                            {staff.stores ? `🏪 ${staff.stores.name}` : ''}
                           </p>
                         )}
                       </div>
@@ -459,33 +667,60 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* Security Tab */}
-        <TabsContent value="security" className="space-y-4">
+        {/* Gold Rate Audit Trail Tab */}
+        <TabsContent value="audit" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Change Password</CardTitle>
-              <CardDescription>Update your account password</CardDescription>
+              <CardTitle>Gold Rate Change History</CardTitle>
+              <CardDescription>Track all rate updates with audit trail</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="current-password">Current Password</Label>
-                <Input id="current-password" type="password" placeholder="Enter current password" disabled />
+            <CardContent>
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {rateHistory.length > 0 ? (
+                  rateHistory.map((rate) => (
+                    <div
+                      key={rate.id}
+                      className="flex items-start justify-between p-4 rounded-lg glass-card border border-border"
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3">
+                          <Badge variant="outline">{rate.karat}</Badge>
+                          <p className="text-2xl font-bold">₹{rate.rate_per_gram.toLocaleString()}/g</p>
+                          {rate.change_percentage !== null && rate.change_percentage !== 0 && (
+                            <Badge variant={rate.change_percentage > 0 ? 'destructive' : 'default'}>
+                              {rate.change_percentage > 0 ? '+' : ''}{rate.change_percentage}%
+                            </Badge>
+                          )}
+                        </div>
+                        {rate.previous_rate && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Previous: ₹{rate.previous_rate.toLocaleString()} 
+                            {' '}→ Change: ₹{(rate.rate_per_gram - rate.previous_rate).toFixed(2)}
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-2">
+                          {rate.updated_by_name ? `Updated by ${rate.updated_by_name}` : 'System update'}
+                          {' • '}
+                          {new Date(rate.effective_from).toLocaleString('en-IN', {
+                            dateStyle: 'medium',
+                            timeStyle: 'short'
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-center text-muted-foreground py-8">
+                    No rate history available yet
+                  </p>
+                )}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="new-password">New Password</Label>
-                <Input id="new-password" type="password" placeholder="Enter new password" disabled />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirm-password">Confirm Password</Label>
-                <Input id="confirm-password" type="password" placeholder="Confirm new password" disabled />
-              </div>
-              <Button className="gold-gradient text-white" disabled>
-                Update Password
-              </Button>
-              <p className="text-xs text-muted-foreground">Password updates coming soon</p>
             </CardContent>
           </Card>
+        </TabsContent>
 
+        {/* Security Tab */}
+        <TabsContent value="security" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle>Logout</CardTitle>
@@ -496,41 +731,6 @@ export default function SettingsPage() {
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
               </Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Audit Log Tab */}
-        <TabsContent value="audit" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Audit Log</CardTitle>
-              <CardDescription>Track system changes and user actions</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {auditLogs.length > 0 ? (
-                  auditLogs.map((log) => (
-                    <div
-                      key={log.id}
-                      className="flex items-start justify-between p-3 rounded-lg glass-card border border-border text-sm"
-                    >
-                      <div className="flex-1">
-                        <p className="font-medium">{log.action}</p>
-                        <p className="text-xs text-muted-foreground">{log.details}</p>
-                      </div>
-                      <div className="text-right text-xs text-muted-foreground">
-                        <p>{new Date(log.created_at).toLocaleDateString()}</p>
-                        <p>{new Date(log.created_at).toLocaleTimeString()}</p>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-center text-muted-foreground py-8">
-                    No audit logs available. Audit logging coming soon.
-                  </p>
-                )}
-              </div>
             </CardContent>
           </Card>
         </TabsContent>

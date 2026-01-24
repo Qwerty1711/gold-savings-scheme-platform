@@ -30,7 +30,7 @@ type GoldRate = {
   id: string;
   karat: string;
   rate_per_gram: number;
-  valid_from: string;
+  effective_from: string;
 };
 
 type Txn = {
@@ -57,14 +57,11 @@ export default function CollectionsPage() {
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [selectedStore, setSelectedStore] = useState('');
   const [goldRate, setGoldRate] = useState<GoldRate | null>(null);
-  const [newGoldRate, setNewGoldRate] = useState('');
-  const [updatingRate, setUpdatingRate] = useState(false);
   const [amount, setAmount] = useState('');
   const [mode, setMode] = useState('CASH');
   const [submitting, setSubmitting] = useState(false);
   const [loadingCustomers, setLoadingCustomers] = useState(true);
   const [transactions, setTransactions] = useState<Txn[]>([]);
-  const [updateRateDialog, setUpdateRateDialog] = useState(false);
 
   useEffect(() => {
     void loadStores();
@@ -119,9 +116,9 @@ export default function CollectionsPage() {
           .order('full_name', { ascending: true }),
         supabase
           .from('gold_rates')
-          .select('id, karat, rate_per_gram, valid_from')
+          .select('id, karat, rate_per_gram, effective_from')
           .eq('retailer_id', profile.retailer_id)
-          .order('valid_from', { ascending: false })
+          .order('effective_from', { ascending: false })
           .limit(1)
           .maybeSingle(),
       ]);
@@ -159,44 +156,7 @@ export default function CollectionsPage() {
     }
   }
 
-  async function updateGoldRate() {
-    if (!profile?.retailer_id) {
-      toast.error('Missing retailer context');
-      return;
-    }
 
-    const rateNum = parseFloat(newGoldRate);
-    if (!Number.isFinite(rateNum) || rateNum <= 0) {
-      toast.error('Enter a valid gold rate');
-      return;
-    }
-
-    setUpdatingRate(true);
-    try {
-      const { data, error } = await supabase
-        .from('gold_rates')
-        .insert({
-          retailer_id: profile.retailer_id,
-          karat: goldRate?.karat || '22K',
-          rate_per_gram: rateNum,
-          valid_from: new Date().toISOString(),
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      setGoldRate(data as GoldRate);
-      setNewGoldRate('');
-      setUpdateRateDialog(false);
-      toast.success(`✅ Gold rate updated to ₹${rateNum}/gram`);
-    } catch (error: any) {
-      console.error('Error updating rate:', error);
-      toast.error(error?.message || 'Failed to update gold rate');
-    } finally {
-      setUpdatingRate(false);
-    }
-  }
 
   async function recordPayment() {
     if (!profile?.retailer_id) {
@@ -262,58 +222,14 @@ export default function CollectionsPage() {
         <p className="text-muted-foreground">Record customer gold savings with live rate tracking</p>
       </div>
 
-      {/* Gold Rate Card */}
+      {/* Gold Rate Card - Read Only */}
       <Card className="glass-card border-2 border-gold-400/30 bg-gradient-to-r from-gold-50/50 to-amber-50/50 dark:from-gold-900/20 dark:to-amber-900/20">
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-gold-600" />
-              <CardTitle>Current Gold Rate</CardTitle>
-            </div>
-            <Dialog open={updateRateDialog} onOpenChange={setUpdateRateDialog}>
-              <DialogTrigger asChild>
-                <Button size="sm" variant="outline" className="border-gold-300">
-                  <Plus className="w-4 h-4 mr-1" />
-                  Update Rate
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Update Gold Rate</DialogTitle>
-                  <DialogDescription>
-                    Set new gold rate per gram ({goldRate?.karat || '22K'})
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Rate per gram (₹)</Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={newGoldRate}
-                      onChange={(e) => setNewGoldRate(e.target.value)}
-                      placeholder={goldRate?.rate_per_gram.toString()}
-                    />
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      variant="ghost"
-                      onClick={() => setUpdateRateDialog(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      className="gold-gradient text-white"
-                      onClick={updateGoldRate}
-                      disabled={updatingRate}
-                    >
-                      {updatingRate ? 'Updating...' : 'Update Rate'}
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-gold-600" />
+            <CardTitle>Current Gold Rate</CardTitle>
           </div>
+          <CardDescription>Update rates from Pulse dashboard</CardDescription>
         </CardHeader>
         <CardContent>
           {goldRate ? (
@@ -322,14 +238,14 @@ export default function CollectionsPage() {
                 <span className="text-4xl font-bold text-gold-600">
                   ₹{goldRate.rate_per_gram.toLocaleString()}
                 </span>
-                <span className="text-lg text-muted-foreground">/gram</span>
+                <span className="text-lg text-muted-foreground">/gram ({goldRate.karat})</span>
               </div>
               <p className="text-sm text-muted-foreground">
-                Last updated: {new Date(goldRate.valid_from).toLocaleString()}
+                Last updated: {new Date(goldRate.effective_from).toLocaleString()}
               </p>
             </div>
           ) : (
-            <p className="text-muted-foreground">No gold rate set. Click "Update Rate" to set one.</p>
+            <p className="text-muted-foreground">No gold rate set. Update from Pulse dashboard.</p>
           )}
         </CardContent>
       </Card>

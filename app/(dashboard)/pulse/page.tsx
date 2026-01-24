@@ -194,10 +194,10 @@ export default function PulseDashboard() {
         // Latest gold rate (22K)
         supabase
           .from('gold_rates')
-          .select('rate_per_gram, karat, valid_from')
+          .select('rate_per_gram, karat, effective_from')
           .eq('retailer_id', retailerId)
           .eq('karat', '22K')
-          .order('valid_from', { ascending: false })
+          .order('effective_from', { ascending: false })
           .limit(1)
           .maybeSingle(),
 
@@ -259,7 +259,7 @@ export default function PulseDashboard() {
         ? {
             rate: safeNumber(rateResult.data.rate_per_gram),
             karat: (rateResult.data as any).karat ?? '22K',
-            validFrom: (rateResult.data as any).valid_from ?? new Date().toISOString(),
+            validFrom: (rateResult.data as any).effective_from ?? new Date().toISOString(),
           }
         : null;
 
@@ -400,7 +400,7 @@ export default function PulseDashboard() {
           retailer_id: profile.retailer_id,
           karat: '22K',
           rate_per_gram: rate,
-          valid_from: new Date().toISOString(),
+          effective_from: new Date().toISOString(),
         })
         .select('id')
         .single();
