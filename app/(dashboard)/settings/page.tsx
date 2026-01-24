@@ -82,7 +82,6 @@ export default function SettingsPage() {
   // Staff dialog state
   const [addStaffDialog, setAddStaffDialog] = useState(false);
   const [newStaffName, setNewStaffName] = useState('');
-  const [newStaffEmail, setNewStaffEmail] = useState('');
   const [newStaffPhone, setNewStaffPhone] = useState('');
   const [newStaffEmployeeId, setNewStaffEmployeeId] = useState('');
   const [newStaffStoreId, setNewStaffStoreId] = useState('');
@@ -128,11 +127,14 @@ export default function SettingsPage() {
       // Load staff members with store info
       const { data: staffData, error: staffError } = await supabase
         .from('user_profiles')
-        .select('id, full_name, email, phone, employee_id, role, store_id, created_at, stores(name)')
+        .select('id, full_name, phone, employee_id, role, store_id, created_at, stores(name)')
         .eq('retailer_id', profile.retailer_id)
         .order('created_at', { ascending: false });
 
-      if (staffError) throw staffError;
+      if (staffError) {
+        console.error('Error loading staff:', staffError);
+        throw staffError;
+      }
       setStaffMembers(staffData || []);
 
       // Load stores
@@ -206,12 +208,12 @@ export default function SettingsPage() {
       toast.error('Missing retailer context');
       return;
     }
-    if (!newStaffName || !newStaffEmail) {
-      toast.error('Name and email are required');
+    if (!newStaffName) {
+      toast.error('Name is required');
       return;
     }
 
-    console.log('Adding staff member:', { newStaffName, newStaffEmail, newStaffPhone, newStaffEmployeeId, newStaffStoreId });
+    console.log('Adding staff member:', { newStaffName, newStaffPhone, newStaffEmployeeId, newStaffStoreId });
     setAddingStaff(true);
     try {
       // Note: This creates a user_profile WITHOUT auth.users entry
@@ -219,7 +221,6 @@ export default function SettingsPage() {
       const { data, error } = await supabase.from('user_profiles').insert({
         retailer_id: profile.retailer_id,
         full_name: newStaffName,
-        email: newStaffEmail,
         phone: newStaffPhone || null,
         employee_id: newStaffEmployeeId || null,
         store_id: newStaffStoreId || null,
@@ -234,7 +235,6 @@ export default function SettingsPage() {
       console.log('Staff added successfully:', data);
       toast.success('✅ Staff member added');
       setNewStaffName('');
-      setNewStaffEmail('');
       setNewStaffPhone('');
       setNewStaffEmployeeId('');
       setNewStaffStoreId('');
@@ -592,19 +592,15 @@ export default function SettingsPage() {
                   <div className="space-y-3">
                     <div className="space-y-2">
                       <Label>Full Name *</Label>
-                      <Input value={newStaffName} onChange={(e) => setNewStaffName(e.target.value)} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Email *</Label>
-                      <Input type="email" value={newStaffEmail} onChange={(e) => setNewStaffEmail(e.target.value)} />
+                      <Input value={newStaffName} onChange={(e) => setNewStaffName(e.target.value)} placeholder="Staff member's full name" />
                     </div>
                     <div className="space-y-2">
                       <Label>Phone</Label>
-                      <Input value={newStaffPhone} onChange={(e) => setNewStaffPhone(e.target.value)} />
+                      <Input value={newStaffPhone} onChange={(e) => setNewStaffPhone(e.target.value)} placeholder="+91 98765 43210" />
                     </div>
                     <div className="space-y-2">
                       <Label>Employee ID</Label>
-                      <Input value={newStaffEmployeeId} onChange={(e) => setNewStaffEmployeeId(e.target.value)} />
+                      <Input value={newStaffEmployeeId} onChange={(e) => setNewStaffEmployeeId(e.target.value)} placeholder="Optional employee ID" />
                     </div>
                     <div className="space-y-2">
                       <Label>Assign to Store</Label>
