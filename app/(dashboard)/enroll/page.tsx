@@ -277,7 +277,15 @@ export default function EnrollmentWizard() {
       return;
     }
 
-    if (!selDetermine customer ID based on enrollment type
+    if (!selectedStore) {
+      toast.error('Please select a store');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // 1) Determine customer ID based on enrollment type
       let customerId: string;
       let finalCustomerName: string;
 
