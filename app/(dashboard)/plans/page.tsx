@@ -361,7 +361,7 @@ export default function PlansPage() {
               {editingId ? 'Edit Plan' : 'Create Plan'}
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingId ? 'Edit Plan' : 'Create New Plan'}</DialogTitle>
               <DialogDescription>
