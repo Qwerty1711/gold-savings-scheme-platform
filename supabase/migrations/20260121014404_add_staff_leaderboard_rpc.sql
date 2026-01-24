@@ -25,12 +25,12 @@ BEGIN
   SELECT
     up.id,
     up.full_name,
-    COALESCE(COUNT(DISTINCT s.id), 0) as enrollments_count,
-    COALESCE(SUM(DISTINCT t.amount), 0) as collections_amount
+    COALESCE(COUNT(DISTINCT e.id), 0) as enrollments_count,
+    COALESCE(SUM(DISTINCT t.amount_paid), 0) as collections_amount
   FROM user_profiles up
-  LEFT JOIN schemes s ON s.enrolled_by = up.id
-    AND s.created_at >= CURRENT_DATE - (period_days || ' days')::interval
-  LEFT JOIN transactions t ON t.recorded_by = up.id
+  LEFT JOIN enrollments e ON e.created_by = up.id
+    AND e.created_at >= CURRENT_DATE - (period_days || ' days')::interval
+  LEFT JOIN transactions t ON t.created_by = up.id
     AND t.paid_at >= CURRENT_DATE - (period_days || ' days')::interval
     AND t.payment_status = 'SUCCESS'
   WHERE up.role IN ('ADMIN', 'STAFF')

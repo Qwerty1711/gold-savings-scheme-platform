@@ -12,6 +12,7 @@ import { useAuth } from '@/lib/contexts/auth-context';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useRouter } from 'next/navigation';
 
@@ -35,6 +36,13 @@ type SchemeStatistics = {
   is_active: boolean;
 };
 
+type Store = {
+  id: string;
+  name: string;
+  code: string | null;
+  is_active: boolean;
+};
+
 const COLORS = ['#FCD34D', '#FBBF24', '#F59E0B', '#D97706', '#B45309'];
 
 export default function PlansPage() {
@@ -50,6 +58,8 @@ export default function PlansPage() {
 
   const [schemes, setSchemes] = useState<SchemeTemplate[]>([]);
   const [schemeStats, setSchemeStats] = useState<SchemeStatistics[]>([]);
+  const [stores, setStores] = useState<Store[]>([]);
+  const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -64,6 +74,7 @@ export default function PlansPage() {
 
   useEffect(() => {
     void loadSchemes();
+    void loadStores();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.retailer_id]);
 
@@ -89,6 +100,25 @@ export default function PlansPage() {
       toast.error('Failed to load schemes');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadStores() {
+    if (!profile?.retailer_id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('stores')
+        .select('id, name, code, is_active')
+        .eq('retailer_id', profile.retailer_id)
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      setStores((data || []) as Store[]);
+    } catch (error) {
+      console.error('Error loading stores:', error);
+      toast.error('Failed to load stores');
     }
   }
 
@@ -142,6 +172,11 @@ export default function PlansPage() {
       return;
     }
 
+    if (selectedStoreIds.length === 0) {
+      toast.error('Please select at least one store for this plan');
+      return;
+    }
+
     const installmentAmount = parseFloat(newScheme.installment_amount);
     const durationMonths = parseInt(newScheme.duration_months);
     const bonusPercentage = newScheme.bonus_percentage ? parseFloat(newScheme.bonus_percentage) : 0;
@@ -180,7 +215,27 @@ export default function PlansPage() {
           console.error('Update error:', error);
           throw error;
         }
-        toast.success(`Plan updated: ${newScheme.name}`);
+
+        // Update store assignments: delete old ones, insert new ones
+        await supabase
+          .from('scheme_store_assignments')
+          .delete()
+          .eq('scheme_id', editingId)
+          .eq('retailer_id', profile.retailer_id);
+
+        const storeAssignments = selectedStoreIds.map(storeId => ({
+          retailer_id: profile.retailer_id,
+          scheme_id: editingId,
+          store_id: storeId,
+        }));
+
+        const { error: assignError } = await supabase
+          .from('scheme_store_assignments')
+          .insert(storeAssignments);
+
+        if (assignError) throw assignError;
+
+        toast.success(`✅ Plan updated: ${newScheme.name}`);
       } else {
         console.log('Creating new plan');
         const { data, error } = await supabase
@@ -194,10 +249,28 @@ export default function PlansPage() {
           throw error;
         }
         console.log('Plan created successfully:', data);
+
+        // Insert store assignments
+        const storeAssignments = selectedStoreIds.map(storeId => ({
+          retailer_id: profile.retailer_id,
+          scheme_id: data.id,
+          store_id: storeId,
+        }));
+
+        const { error: assignError } = await supabase
+          .from('scheme_store_assignments')
+          .insert(storeAssignments);
+
+        if (assignError) {
+          console.error('Store assignment error:', assignError);
+          throw assignError;
+        }
+
         toast.success(`✅ Plan created: ${newScheme.name}`);
       }
 
       setNewScheme({ name: '', installment_amount: '', duration_months: '', bonus_percentage: '', description: '' });
+      setSelectedStoreIds([]);
       setEditingId(null);
       setDialogOpen(false);
       console.log('Reloading schemes after save...');
@@ -232,7 +305,7 @@ export default function PlansPage() {
     }
   }
 
-  function editScheme(scheme: SchemeTemplate) {
+  async function editScheme(scheme: SchemeTemplate) {
     setEditingId(scheme.id);
     setNewScheme({
       name: scheme.name,
@@ -241,11 +314,30 @@ export default function PlansPage() {
       bonus_percentage: scheme.bonus_percentage.toString(),
       description: scheme.description || '',
     });
+
+    // Load existing store assignments for this scheme
+    if (profile?.retailer_id) {
+      try {
+        const { data, error } = await supabase
+          .from('scheme_store_assignments')
+          .select('store_id')
+          .eq('scheme_id', scheme.id)
+          .eq('retailer_id', profile.retailer_id);
+
+        if (error) throw error;
+        const storeIds = (data || []).map((assignment: any) => assignment.store_id);
+        setSelectedStoreIds(storeIds);
+      } catch (error) {
+        console.error('Error loading store assignments:', error);
+      }
+    }
+
     setDialogOpen(true);
   }
 
   function resetForm() {
     setEditingId(null);
+    setSelectedStoreIds([]);
     setNewScheme({ name: '', installment_amount: '', duration_months: '', bonus_percentage: '', description: '' });
   }
 
@@ -326,6 +418,61 @@ export default function PlansPage() {
                   onChange={(e) => setNewScheme({ ...newScheme, description: e.target.value })}
                   rows={3}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Available in Stores *</Label>
+                <p className="text-xs text-muted-foreground mb-2">Select which stores can offer this plan</p>
+                <div className="border rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">
+                  {stores.length === 0 ? (
+                    <p className="text-xs text-muted-foreground py-2">No stores found. Please create a store first.</p>
+                  ) : (
+                    <>
+                      <div className="flex items-center space-x-2 pb-2 border-b">
+                        <Checkbox
+                          id="select-all-stores"
+                          checked={selectedStoreIds.length === stores.length}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedStoreIds(stores.map(s => s.id));
+                            } else {
+                              setSelectedStoreIds([]);
+                            }
+                          }}
+                        />
+                        <label htmlFor="select-all-stores" className="text-sm font-medium cursor-pointer">
+                          Select All Stores
+                        </label>
+                      </div>
+                      {stores.map(store => (
+                        <div key={store.id} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`store-${store.id}`}
+                            checked={selectedStoreIds.includes(store.id)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedStoreIds([...selectedStoreIds, store.id]);
+                              } else {
+                                setSelectedStoreIds(selectedStoreIds.filter(id => id !== store.id));
+                              }
+                            }}
+                          />
+                          <label
+                            htmlFor={`store-${store.id}`}
+                            className="text-sm cursor-pointer flex-1"
+                          >
+                            {store.name} {store.code && <span className="text-muted-foreground">({store.code})</span>}
+                          </label>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+                {selectedStoreIds.length > 0 && (
+                  <p className="text-xs text-green-600 mt-1">
+                    ✓ {selectedStoreIds.length} store{selectedStoreIds.length > 1 ? 's' : ''} selected
+                  </p>
+                )}
               </div>
 
               <Button

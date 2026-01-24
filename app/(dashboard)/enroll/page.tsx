@@ -31,6 +31,12 @@ type StaffMember = {
   full_name: string;
 };
 
+type Store = {
+  id: string;
+  name: string;
+  code: string | null;
+};
+
 const SOURCE_OPTIONS = [
   { value: 'WALK_IN', label: 'Walk-In' },
   { value: 'REFERRAL', label: 'Referral' },
@@ -85,15 +91,40 @@ export default function EnrollmentWizard() {
 
   const [plans, setPlans] = useState<Plan[]>([]);
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
+  const [stores, setStores] = useState<Store[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<string>('');
   const [commitmentAmount, setCommitmentAmount] = useState('');
   const [assignedStaff, setAssignedStaff] = useState<string>('');
+  const [selectedStore, setSelectedStore] = useState<string>('');
 
   useEffect(() => {
     if (!profile?.retailer_id) return;
     void loadPlansAndStaff();
+    void loadStores();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.retailer_id]);
+
+  async function loadStores() {
+    if (!profile?.retailer_id) return;
+    try {
+      const { data, error } = await supabase
+        .from('stores')
+        .select('id, name, code')
+        .eq('retailer_id', profile.retailer_id)
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      const storeList = (data || []) as Store[];
+      setStores(storeList);
+      // Auto-select if only one store
+      if (storeList.length === 1) {
+        setSelectedStore(storeList[0].id);
+      }
+    } catch (error) {
+      console.error('Error loading stores:', error);
+    }
+  }
 
   async function loadPlansAndStaff() {
     try {
@@ -208,6 +239,11 @@ export default function EnrollmentWizard() {
       return;
     }
 
+    if (!selectedStore) {
+      toast.error('Please select a store');
+      return;
+    }
+
     // Note: max_commitment_override removed (using scheme_templates now)
 
     setLoading(true);
@@ -224,6 +260,7 @@ export default function EnrollmentWizard() {
             phone: customerPhone,
             full_name: customerName,
             customer_code: `CUST${Date.now()}`,
+            store_id: selectedStore,
           })
           .select()
           .single();
@@ -253,6 +290,7 @@ export default function EnrollmentWizard() {
           commitment_amount: amount,
           source,
           maturity_date: toISODate(maturity),
+          store_id: selectedStore,
 
           // optional: you have assigned_staff_id column
           assigned_staff_id: assignedStaff || null,
@@ -479,6 +517,25 @@ export default function EnrollmentWizard() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="store">Store Location *</Label>
+                    <Select value={selectedStore} onValueChange={setSelectedStore}>
+                      <SelectTrigger id="store">
+                        <SelectValue placeholder="Select store" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {stores.map((store) => (
+                          <SelectItem key={store.id} value={store.id}>
+                            {store.name} {store.code && `(${store.code})`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {stores.length === 0 && (
+                      <p className="text-xs text-muted-foreground">No stores available. Please contact administrator.</p>
+                    )}
+                  </div>
                 </>
               )}
             </CardContent>
@@ -492,7 +549,7 @@ export default function EnrollmentWizard() {
             <Button
               onClick={handleNextStep}
               className="flex-1 jewel-gradient text-white hover:opacity-90"
-              disabled={loading || !selectedPlan || !commitmentAmount}
+              disabled={loading || !selectedPlan || !commitmentAmount || !selectedStore}
             >
               {loading ? 'Enrolling...' : 'Complete Enrollment'}
               <Sparkles className="w-4 h-4 ml-2" />

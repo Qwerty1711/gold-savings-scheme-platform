@@ -64,6 +64,9 @@ BEGIN
   END IF;
 END $$;
 
+-- Drop existing function if it exists (may have different return type)
+DROP FUNCTION IF EXISTS customer_self_enroll(uuid, numeric, text);
+
 -- Create RPC function for customer self-enrollment
 CREATE OR REPLACE FUNCTION customer_self_enroll(
   p_plan_id uuid,
@@ -109,10 +112,10 @@ BEGIN
   END IF;
 
   -- Validate commitment amount
-  IF p_commitment_amount < v_plan.installment_amount THEN
+  IF p_commitment_amount < v_plan.monthly_amount THEN
     RETURN json_build_object(
       'success', false,
-      'error', 'Commitment amount must be at least ₹' || v_plan.installment_amount
+      'error', 'Commitment amount must be at least ₹' || v_plan.monthly_amount
     );
   END IF;
 
@@ -131,12 +134,12 @@ BEGIN
   END IF;
 
   -- Check for existing active enrollment in same plan
-  SELECT s.id INTO v_existing_enrollment
-  FROM schemes s
-  WHERE s.customer_id = v_customer.id
-    AND s.retailer_id = v_retailer_id
-    AND s.status = 'ACTIVE'
-    AND s.scheme_name = v_plan.name
+  SELECT e.id INTO v_existing_enrollment
+  FROM enrollments e
+  WHERE e.customer_id = v_customer.id
+    AND e.retailer_id = v_retailer_id
+    AND e.status = 'ACTIVE'
+    AND e.plan_id = v_plan.id
   LIMIT 1;
 
   IF v_existing_enrollment IS NOT NULL THEN
@@ -152,36 +155,34 @@ BEGIN
   v_billing_day := EXTRACT(DAY FROM v_start_date);
   v_first_billing_month := date_trunc('month', v_start_date)::date;
 
-  -- Create scheme enrollment
-  INSERT INTO schemes (
+  -- Create enrollment
+  INSERT INTO enrollments (
     retailer_id,
     customer_id,
-    scheme_name,
-    monthly_amount,
-    duration_months,
+    plan_id,
+    commitment_amount,
+    plan_duration_months,
     start_date,
-    end_date,
     billing_day_of_month,
     status,
-    karat
+    created_by
   ) VALUES (
     v_retailer_id,
     v_customer.id,
-    v_plan.name,
+    v_plan.id,
     p_commitment_amount,
     v_plan.duration_months,
     v_start_date,
-    v_end_date,
     v_billing_day,
     'ACTIVE',
-    '22K'
+    v_user_id
   )
   RETURNING id INTO v_scheme_id;
 
   -- Create first billing month record
   INSERT INTO enrollment_billing_months (
     retailer_id,
-    scheme_id,
+    enrollment_id,
     customer_id,
     billing_month,
     due_date,

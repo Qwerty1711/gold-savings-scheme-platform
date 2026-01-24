@@ -43,40 +43,45 @@
 */
 
 -- =====================================================
--- 1. ADD BILLING FIELDS TO SCHEMES TABLE
+-- 1. ADD BILLING FIELDS TO ENROLLMENTS TABLE
 -- =====================================================
+
+-- Drop dependent views temporarily (will be recreated later or by other migrations)
+DROP VIEW IF EXISTS schemes CASCADE;
+DROP VIEW IF EXISTS enrollment_payment_status CASCADE;
+DROP VIEW IF EXISTS staff_performance CASCADE;
 
 -- Add billing_day_of_month (1-31)
 DO $$ 
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='schemes' AND column_name='billing_day_of_month') THEN
-    ALTER TABLE schemes ADD COLUMN billing_day_of_month int;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='enrollments' AND column_name='billing_day_of_month') THEN
+    ALTER TABLE enrollments ADD COLUMN billing_day_of_month int;
   END IF;
 END $$;
 
 -- Add timezone
 DO $$ 
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='schemes' AND column_name='timezone') THEN
-    ALTER TABLE schemes ADD COLUMN timezone text DEFAULT 'Asia/Kolkata';
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='enrollments' AND column_name='timezone') THEN
+    ALTER TABLE enrollments ADD COLUMN timezone text DEFAULT 'Asia/Kolkata';
   END IF;
 END $$;
 
 -- Calculate billing_day_of_month from existing start_date
-UPDATE schemes
+UPDATE enrollments
 SET billing_day_of_month = EXTRACT(DAY FROM start_date)::int
 WHERE billing_day_of_month IS NULL;
 
 -- Set NOT NULL constraint
-ALTER TABLE schemes ALTER COLUMN billing_day_of_month SET NOT NULL;
+ALTER TABLE enrollments ALTER COLUMN billing_day_of_month SET NOT NULL;
 
 -- Add check constraint
-ALTER TABLE schemes DROP CONSTRAINT IF EXISTS check_billing_day_range;
-ALTER TABLE schemes ADD CONSTRAINT check_billing_day_range 
+ALTER TABLE enrollments DROP CONSTRAINT IF EXISTS check_billing_day_range;
+ALTER TABLE enrollments ADD CONSTRAINT check_billing_day_range 
   CHECK (billing_day_of_month >= 1 AND billing_day_of_month <= 31);
 
-COMMENT ON COLUMN schemes.billing_day_of_month IS 'Day of month (1-31) when payment is due. Auto-set from start_date.';
-COMMENT ON COLUMN schemes.timezone IS 'Timezone for date calculations. Default: Asia/Kolkata';
+COMMENT ON COLUMN enrollments.billing_day_of_month IS 'Day of month (1-31) when payment is due. Auto-set from start_date.';
+COMMENT ON COLUMN enrollments.timezone IS 'Timezone for date calculations. Default: Asia/Kolkata';
 
 -- =====================================================
 -- 2. CREATE ENROLLMENT_BILLING_MONTHS TABLE
@@ -93,7 +98,7 @@ END $$;
 CREATE TABLE IF NOT EXISTS enrollment_billing_months (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   retailer_id uuid NOT NULL REFERENCES retailers(id) ON DELETE CASCADE,
-  scheme_id uuid NOT NULL REFERENCES schemes(id) ON DELETE CASCADE,
+  enrollment_id uuid NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,
   customer_id uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
   
   -- Billing period
@@ -112,11 +117,11 @@ CREATE TABLE IF NOT EXISTS enrollment_billing_months (
   updated_at timestamptz DEFAULT now() NOT NULL,
   
   -- Constraints
-  CONSTRAINT unique_billing_month_per_scheme UNIQUE (retailer_id, scheme_id, billing_month)
+  CONSTRAINT unique_billing_month_per_enrollment UNIQUE (retailer_id, enrollment_id, billing_month)
 );
 
 -- Indexes
-CREATE INDEX IF NOT EXISTS idx_billing_months_scheme ON enrollment_billing_months(scheme_id);
+CREATE INDEX IF NOT EXISTS idx_billing_months_enrollment ON enrollment_billing_months(enrollment_id);
 CREATE INDEX IF NOT EXISTS idx_billing_months_customer ON enrollment_billing_months(customer_id);
 CREATE INDEX IF NOT EXISTS idx_billing_months_status ON enrollment_billing_months(status);
 CREATE INDEX IF NOT EXISTS idx_billing_months_due_date ON enrollment_billing_months(due_date);
@@ -128,27 +133,54 @@ COMMENT ON TABLE enrollment_billing_months IS 'Tracks billing status for each mo
 -- 3. UPDATE NOTIFICATION_QUEUE TABLE
 -- =====================================================
 
--- Add new columns to existing notification_queue if they don't exist
+-- Handle notification_queue regardless of whether it's a view or table
 DO $$ 
+DECLARE
+  v_is_view boolean;
+  v_table_exists boolean;
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notification_queue' AND column_name='billing_month') THEN
-    ALTER TABLE notification_queue ADD COLUMN billing_month date;
+  -- Check if notification_queue exists as a view
+  SELECT EXISTS (
+    SELECT 1 FROM information_schema.views 
+    WHERE table_name = 'notification_queue'
+  ) INTO v_is_view;
+
+  -- If it's a view, drop it completely (Migration 3 should recreate as table)
+  IF v_is_view THEN
+    RAISE NOTICE 'Dropping notification_queue view (will be recreated as table by Migration 3)';
+    DROP VIEW IF EXISTS notification_queue CASCADE;
   END IF;
-  
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notification_queue' AND column_name='template_key') THEN
-    ALTER TABLE notification_queue ADD COLUMN template_key text;
-  END IF;
-  
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notification_queue' AND column_name='payload') THEN
-    ALTER TABLE notification_queue ADD COLUMN payload jsonb DEFAULT '{}'::jsonb;
-  END IF;
-  
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notification_queue' AND column_name='retry_count') THEN
-    ALTER TABLE notification_queue ADD COLUMN retry_count int DEFAULT 0;
-  END IF;
-  
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notification_queue' AND column_name='error_message') THEN
-    ALTER TABLE notification_queue ADD COLUMN error_message text;
+
+  -- Check if notification_queue exists as a table now
+  SELECT EXISTS (
+    SELECT 1 FROM information_schema.tables 
+    WHERE table_name = 'notification_queue' 
+    AND table_type = 'BASE TABLE'
+  ) INTO v_table_exists;
+
+  -- If table exists, add new columns
+  IF v_table_exists THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notification_queue' AND column_name='billing_month') THEN
+      ALTER TABLE notification_queue ADD COLUMN billing_month date;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notification_queue' AND column_name='template_key') THEN
+      ALTER TABLE notification_queue ADD COLUMN template_key text;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notification_queue' AND column_name='payload') THEN
+      ALTER TABLE notification_queue ADD COLUMN payload jsonb DEFAULT '{}'::jsonb;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notification_queue' AND column_name='retry_count') THEN
+      ALTER TABLE notification_queue ADD COLUMN retry_count int DEFAULT 0;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notification_queue' AND column_name='error_message') THEN
+      ALTER TABLE notification_queue ADD COLUMN error_message text;
+    END IF;
+  ELSE
+    RAISE NOTICE 'notification_queue table does not exist. Please run Migration 3 first to create it.';
   END IF;
 END $$;
 
@@ -182,7 +214,7 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 
 COMMENT ON FUNCTION calculate_due_date IS 'Calculates due date for a billing month, handling month-end edge cases';
 
--- Function to generate billing months for a scheme
+-- Function to generate billing months for an enrollment
 CREATE OR REPLACE FUNCTION generate_billing_months_for_scheme(
   p_scheme_id uuid,
   p_months_ahead int DEFAULT 12
@@ -195,11 +227,11 @@ DECLARE
   v_months_to_generate int;
   v_month_offset int;
 BEGIN
-  -- Get scheme details
-  SELECT s.*, s.billing_day_of_month, s.start_date, s.duration_months, s.retailer_id, s.customer_id
+  -- Get enrollment details
+  SELECT e.*, e.billing_day_of_month, e.start_date, e.plan_duration_months as duration_months, e.retailer_id, e.customer_id
   INTO v_scheme
-  FROM schemes s
-  WHERE s.id = p_scheme_id;
+  FROM enrollments e
+  WHERE e.id = p_scheme_id;
   
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Scheme not found: %', p_scheme_id;
@@ -218,7 +250,7 @@ BEGIN
     -- Insert if not exists
     INSERT INTO enrollment_billing_months (
       retailer_id,
-      scheme_id,
+      enrollment_id,
       customer_id,
       billing_month,
       due_date,
@@ -237,7 +269,7 @@ BEGIN
         ELSE 'DUE'::billing_status
       END
     )
-    ON CONFLICT (retailer_id, scheme_id, billing_month) DO NOTHING;
+    ON CONFLICT (retailer_id, enrollment_id, billing_month) DO NOTHING;
   END LOOP;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -248,19 +280,19 @@ COMMENT ON FUNCTION generate_billing_months_for_scheme IS 'Generates billing mon
 -- 5. TRIGGERS
 -- =====================================================
 
--- Trigger to auto-generate billing months when scheme is created
+-- Trigger to auto-generate billing months when enrollment is created
 CREATE OR REPLACE FUNCTION auto_generate_billing_months()
 RETURNS TRIGGER AS $$
 BEGIN
-  -- Generate billing months for new scheme
+  -- Generate billing months for new enrollment
   PERFORM generate_billing_months_for_scheme(NEW.id, 12);
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS trigger_auto_generate_billing_months ON schemes;
+DROP TRIGGER IF EXISTS trigger_auto_generate_billing_months ON enrollments;
 CREATE TRIGGER trigger_auto_generate_billing_months
-  AFTER INSERT ON schemes
+  AFTER INSERT ON enrollments
   FOR EACH ROW
   EXECUTE FUNCTION auto_generate_billing_months();
 
@@ -281,7 +313,7 @@ BEGIN
       primary_transaction_id = NEW.id,
       status = 'PAID'::billing_status,
       updated_at = now()
-    WHERE scheme_id = NEW.scheme_id
+    WHERE enrollment_id = NEW.enrollment_id
       AND billing_month = v_billing_month;
   END IF;
   
@@ -332,24 +364,24 @@ BEGIN
   FOR v_billing_month IN
     SELECT 
       ebm.*,
-      s.scheme_name,
-      s.monthly_amount,
+      e.plan_id,
+      e.commitment_amount as monthly_amount,
       c.full_name as customer_name,
       c.phone as customer_phone
     FROM enrollment_billing_months ebm
-    JOIN schemes s ON s.id = ebm.scheme_id
+    JOIN enrollments e ON e.id = ebm.enrollment_id
     JOIN customers c ON c.id = ebm.customer_id
     WHERE ebm.status IN ('DUE', 'MISSED')
       AND ebm.due_date < CURRENT_DATE
       AND ebm.primary_paid = false
-      AND s.status = 'ACTIVE'
+      AND e.status = 'ACTIVE'
   LOOP
     v_schemes_processed := v_schemes_processed + 1;
     
     -- Check when last reminder was sent for this billing month
     SELECT MAX(created_at::date) INTO v_last_reminder_date
     FROM notification_queue
-    WHERE scheme_id = v_billing_month.scheme_id
+    WHERE enrollment_id = v_billing_month.enrollment_id
       AND billing_month = v_billing_month.billing_month
       AND template_key IN ('DUE_REMINDER', 'OVERDUE_REMINDER');
     
@@ -366,7 +398,7 @@ BEGIN
       INSERT INTO notification_queue (
         retailer_id,
         customer_id,
-        scheme_id,
+        enrollment_id,
         billing_month,
         channel,
         template_key,
@@ -377,7 +409,7 @@ BEGIN
       ) VALUES (
         v_billing_month.retailer_id,
         v_billing_month.customer_id,
-        v_billing_month.scheme_id,
+        v_billing_month.enrollment_id,
         v_billing_month.billing_month,
         'IN_APP',
         CASE 
@@ -385,7 +417,6 @@ BEGIN
           ELSE 'DUE_REMINDER'
         END,
         jsonb_build_object(
-          'scheme_name', v_billing_month.scheme_name,
           'monthly_amount', v_billing_month.monthly_amount,
           'due_date', v_billing_month.due_date,
           'days_overdue', CURRENT_DATE - v_billing_month.due_date,
@@ -418,12 +449,12 @@ COMMENT ON FUNCTION enqueue_due_reminders IS 'Daily scheduler: enqueues alternat
 -- 7. VIEWS FOR REPORTING
 -- =====================================================
 
--- View: Current month billing status per scheme
+-- View: Current month billing status per enrollment
 CREATE OR REPLACE VIEW current_month_billing_status AS
 SELECT 
   ebm.id,
-  ebm.scheme_id,
-  s.scheme_name,
+  ebm.enrollment_id,
+  p.name as plan_name,
   ebm.customer_id,
   c.full_name as customer_name,
   c.phone as customer_phone,
@@ -435,12 +466,13 @@ SELECT
     WHEN ebm.due_date < CURRENT_DATE AND NOT ebm.primary_paid THEN CURRENT_DATE - ebm.due_date
     ELSE 0
   END as days_overdue,
-  s.monthly_amount
+  e.commitment_amount as monthly_amount
 FROM enrollment_billing_months ebm
-JOIN schemes s ON s.id = ebm.scheme_id
+JOIN enrollments e ON e.id = ebm.enrollment_id
+LEFT JOIN scheme_templates p ON p.id = e.plan_id
 JOIN customers c ON c.id = ebm.customer_id
 WHERE ebm.billing_month = DATE_TRUNC('month', CURRENT_DATE)::date
-  AND s.status = 'ACTIVE';
+  AND e.status = 'ACTIVE';
 
 COMMENT ON VIEW current_month_billing_status IS 'Shows current month billing status for all active schemes';
 
@@ -448,8 +480,8 @@ COMMENT ON VIEW current_month_billing_status IS 'Shows current month billing sta
 CREATE OR REPLACE VIEW overdue_billing_months AS
 SELECT 
   ebm.id,
-  ebm.scheme_id,
-  s.scheme_name,
+  ebm.enrollment_id,
+  p.name as plan_name,
   ebm.customer_id,
   c.full_name as customer_name,
   c.phone as customer_phone,
@@ -459,15 +491,16 @@ SELECT
   ebm.due_date,
   ebm.status,
   CURRENT_DATE - ebm.due_date as days_overdue,
-  s.monthly_amount
+  e.commitment_amount as monthly_amount
 FROM enrollment_billing_months ebm
-JOIN schemes s ON s.id = ebm.scheme_id
+JOIN enrollments e ON e.id = ebm.enrollment_id
+LEFT JOIN scheme_templates p ON p.id = e.plan_id
 JOIN customers c ON c.id = ebm.customer_id
 JOIN retailers r ON r.id = ebm.retailer_id
 WHERE ebm.status IN ('DUE', 'MISSED')
   AND ebm.due_date < CURRENT_DATE
   AND NOT ebm.primary_paid
-  AND s.status = 'ACTIVE'
+  AND e.status = 'ACTIVE'
 ORDER BY ebm.due_date ASC;
 
 COMMENT ON VIEW overdue_billing_months IS 'Shows all overdue billing months across all schemes';
@@ -484,7 +517,7 @@ DROP POLICY IF EXISTS "Customers can view own billing months" ON enrollment_bill
 CREATE POLICY "Customers can view own billing months"
   ON enrollment_billing_months FOR SELECT
   TO authenticated
-  USING (customer_id IN (SELECT id FROM customers WHERE user_id = auth.uid()));
+  USING (customer_id IN (SELECT id FROM customers WHERE id = auth.uid()));
 
 DROP POLICY IF EXISTS "Staff can view all billing months" ON enrollment_billing_months;
 CREATE POLICY "Staff can view all billing months"
@@ -502,15 +535,15 @@ CREATE POLICY "Staff can update billing months"
 -- 9. GENERATE BILLING MONTHS FOR EXISTING SCHEMES
 -- =====================================================
 
--- Generate billing months for all existing schemes
+-- Generate billing months for all existing enrollments
 DO $$
 DECLARE
-  v_scheme_id uuid;
+  v_enrollment_id uuid;
 BEGIN
-  FOR v_scheme_id IN
-    SELECT id FROM schemes
+  FOR v_enrollment_id IN
+    SELECT id FROM enrollments
   LOOP
-    PERFORM generate_billing_months_for_scheme(v_scheme_id, 3);
+    PERFORM generate_billing_months_for_scheme(v_enrollment_id, 3);
   END LOOP;
 END $$;
 
@@ -519,10 +552,9 @@ UPDATE enrollment_billing_months ebm
 SET 
   primary_paid = true,
   primary_transaction_id = t.id,
-  status = 'PAID'::billing_status,
-  updated_at = now()
+  status = 'PAID'::billing_status
 FROM transactions t
-WHERE t.scheme_id = ebm.scheme_id
+WHERE t.enrollment_id = ebm.enrollment_id
   AND t.billing_month = ebm.billing_month
   AND t.txn_type = 'PRIMARY_INSTALLMENT'
   AND t.payment_status = 'SUCCESS'

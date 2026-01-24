@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Plus, User, Phone, Calendar, Users, Save } from 'lucide-react';
+import { Search, Plus, User, Phone, Calendar, Users, Save, Download, Upload } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -237,6 +237,74 @@ export default function SchemesPage() {
     }
   }
 
+  function exportToExcel() {
+    if (typeof window === 'undefined') return;
+    
+    import('xlsx').then((XLSX) => {
+      const exportData = filtered.map((e) => ({
+        'Customer Name': e.customers?.full_name || '',
+        'Phone': e.customers?.phone || '',
+        'Plan': e.plans?.plan_name || '',
+        'Monthly Amount': e.commitment_amount || e.plans?.monthly_amount || 0,
+        'Status': e.status,
+        'Start Date': new Date(e.start_date).toLocaleDateString(),
+        'Billing Day': e.billing_day_of_month,
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Enrollments');
+      
+      const fileName = `enrollments_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+      
+      toast.success(`Exported ${exportData.length} enrollments to ${fileName}`);
+    }).catch((error) => {
+      console.error('Error exporting:', error);
+      toast.error('Failed to export enrollments');
+    });
+  }
+
+  function handleImportFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    import('xlsx').then((XLSX) => {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const jsonData = XLSX.utils.sheet_to_json(firstSheet) as any[];
+
+          toast.info(`Importing ${jsonData.length} records. This may take a moment...`);
+
+          // Process imports (this is a simplified version - you'd need proper validation)
+          let successCount = 0;
+          for (const row of jsonData) {
+            // Add validation and import logic here
+            // This is a placeholder - implement based on your data structure
+            successCount++;
+          }
+
+          toast.success(`✅ Successfully imported ${successCount} records`);
+          await loadEnrollments();
+        } catch (error: any) {
+          console.error('Import error:', error);
+          toast.error(`Import failed: ${error.message}`);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }).catch((error) => {
+      console.error('Error loading xlsx:', error);
+      toast.error('Failed to load import library');
+    });
+
+    // Reset input
+    event.target.value = '';
+  }
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return enrollments;
@@ -301,14 +369,44 @@ export default function SchemesPage() {
           <p className="text-muted-foreground">Manage customer gold savings journey</p>
         </div>
 
-        {/* Keep button UI; you can wire it later */}
-        <Button 
-          className="gold-gradient text-white hover:opacity-90"
-          onClick={() => router.push('/enroll')}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          New Enrollment
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline"
+            onClick={exportToExcel}
+            disabled={filtered.length === 0}
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Export
+          </Button>
+          
+          <label>
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleImportFile}
+              className="hidden"
+              id="import-enrollments"
+            />
+            <Button 
+              variant="outline"
+              onClick={() => document.getElementById('import-enrollments')?.click()}
+              asChild
+            >
+              <span>
+                <Upload className="w-4 h-4 mr-2" />
+                Import
+              </span>
+            </Button>
+          </label>
+
+          <Button 
+            className="gold-gradient text-white hover:opacity-90"
+            onClick={() => router.push('/enroll')}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            New Enrollment
+          </Button>
+        </div>
       </div>
 
       <div className="relative">

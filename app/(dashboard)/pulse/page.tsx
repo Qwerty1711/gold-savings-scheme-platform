@@ -18,6 +18,7 @@ import { supabase } from '@/lib/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/auth-context';
@@ -30,6 +31,8 @@ type DashboardMetrics = {
   overdueCount: number;
   newEnrollmentsToday: number;
   activeCustomers: number;
+  planAmountTotal: number;
+  totalActiveEnrollmentsAllTime: number;
   currentRate: {
     rate: number;
     karat: string;
@@ -71,6 +74,18 @@ export default function PulseDashboard() {
 
   const [updateRateDialog, setUpdateRateDialog] = useState(false);
   const [newRate, setNewRate] = useState('');
+  const [timeFilter, setTimeFilter] = useState<'DAY' | 'WEEK' | 'MONTH' | 'YEAR' | 'RANGE'>('DAY');
+  const [customStart, setCustomStart] = useState<string>('');
+  const [customEnd, setCustomEnd] = useState<string>('');
+  const periodLabel = useMemo(() => {
+    switch (timeFilter) {
+      case 'DAY': return 'Day';
+      case 'WEEK': return 'This Week';
+      case 'MONTH': return 'This Month';
+      case 'YEAR': return 'This Year';
+      default: return 'Selected Range';
+    }
+  }, [timeFilter]);
 
   const todayRange = useMemo(() => {
     // Use UTC day boundaries to avoid "today" drifting due to server timezone comparisons
@@ -90,6 +105,12 @@ export default function PulseDashboard() {
     void loadChartTrends();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.retailer_id]);
+
+  useEffect(() => {
+    if (!profile?.retailer_id) return;
+    void loadDashboard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeFilter, customStart, customEnd]);
 
   async function safeCountCustomers(retailerId: string): Promise<number> {
     const { count, error } = await supabase
@@ -111,7 +132,53 @@ export default function PulseDashboard() {
 
     try {
       const retailerId = profile.retailer_id;
-      const { startISO, endISO, todayDateISO } = todayRange;
+      let startISO: string;
+      let endISO: string;
+      let todayDateISO: string;
+
+      const now = new Date();
+      const startOfDayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+      const endOfDayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0, 0));
+
+      const toISO = (d: Date) => d.toISOString();
+      const startOfWeekUTC = (d: Date) => {
+        const day = d.getUTCDay();
+        const diff = (day + 6) % 7; // Monday start
+        const s = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - diff, 0, 0, 0, 0));
+        const e = new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate() + 7, 0, 0, 0, 0));
+        return { s, e };
+      };
+      const startOfMonthUTC = (d: Date) => {
+        const s = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1, 0, 0, 0, 0));
+        const e = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1, 0, 0, 0, 0));
+        return { s, e };
+      };
+      const startOfYearUTC = (d: Date) => {
+        const s = new Date(Date.UTC(d.getUTCFullYear(), 0, 1, 0, 0, 0, 0));
+        const e = new Date(Date.UTC(d.getUTCFullYear() + 1, 0, 1, 0, 0, 0, 0));
+        return { s, e };
+      };
+
+      if (timeFilter === 'DAY') {
+        startISO = toISO(startOfDayUTC);
+        endISO = toISO(endOfDayUTC);
+      } else if (timeFilter === 'WEEK') {
+        const { s, e } = startOfWeekUTC(now);
+        startISO = toISO(s); endISO = toISO(e);
+      } else if (timeFilter === 'MONTH') {
+        const { s, e } = startOfMonthUTC(now);
+        startISO = toISO(s); endISO = toISO(e);
+      } else if (timeFilter === 'YEAR') {
+        const { s, e } = startOfYearUTC(now);
+        startISO = toISO(s); endISO = toISO(e);
+      } else {
+        const s = customStart ? new Date(customStart) : startOfDayUTC;
+        const e = customEnd ? new Date(customEnd) : endOfDayUTC;
+        startISO = toISO(s);
+        endISO = toISO(e);
+      }
+
+      todayDateISO = startOfDayUTC.toISOString().split('T')[0];
 
       const [
         rateResult,
@@ -121,6 +188,8 @@ export default function PulseDashboard() {
         enrollmentsResult,
         customersCount,
         staffResult,
+        activeEnrollmentsAll,
+        schemesAll,
       ] = await Promise.all([
         // Latest gold rate (22K)
         supabase
@@ -171,6 +240,19 @@ export default function PulseDashboard() {
 
         // RPC leaderboard (keep; your DB function defines output)
         supabase.rpc('get_staff_leaderboard', { period_days: 30 }),
+
+        // All active enrollments (for plan total computation)
+        supabase
+          .from('enrollments')
+          .select('id, scheme_id, status')
+          .eq('retailer_id', retailerId)
+          .eq('status', 'ACTIVE'),
+
+        // All schemes
+        supabase
+          .from('scheme_templates')
+          .select('id, installment_amount, duration_months')
+          .eq('retailer_id', retailerId),
       ]);
 
       const currentRate = rateResult.data
@@ -187,6 +269,20 @@ export default function PulseDashboard() {
       const goldAllocatedToday =
         txnsResult.data?.reduce((sum: number, t: any) => sum + safeNumber(t.grams_allocated_snapshot), 0) || 0;
 
+      // Compute plan total = sum(installment_amount * duration_months) for each active enrollment
+      const schemesMap = new Map<string, { installment_amount: number; duration_months: number }>();
+      (schemesAll.data || []).forEach((s: any) => {
+        schemesMap.set(String(s.id), {
+          installment_amount: safeNumber(s.installment_amount),
+          duration_months: safeNumber(s.duration_months),
+        });
+      });
+      const planAmountTotal = (activeEnrollmentsAll.data || []).reduce((sum: number, e: any) => {
+        const s = schemesMap.get(String(e.scheme_id));
+        if (!s) return sum;
+        return sum + s.installment_amount * s.duration_months;
+      }, 0);
+
       setMetrics({
         todayCollections,
         goldAllocatedToday,
@@ -194,6 +290,8 @@ export default function PulseDashboard() {
         overdueCount: overdueResult.count || 0,
         newEnrollmentsToday: enrollmentsResult.count || 0,
         activeCustomers: customersCount || 0,
+        planAmountTotal,
+        totalActiveEnrollmentsAllTime: (activeEnrollmentsAll.data || []).length,
         currentRate,
       });
 
@@ -296,19 +394,20 @@ export default function PulseDashboard() {
     }
 
     try {
-      // created_by is frequently a required FK in your setup; keep it as-is
-      const { error } = await supabase.from('gold_rates').insert({
-        retailer_id: profile.retailer_id,
-        karat: '22K',
-        rate_per_gram: rate,
-        valid_from: new Date().toISOString(),
-        created_by: profile.id,
-        notes: null,
-      });
+      const { data, error } = await supabase
+        .from('gold_rates')
+        .insert({
+          retailer_id: profile.retailer_id,
+          karat: '22K',
+          rate_per_gram: rate,
+          valid_from: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
 
       if (error) throw error;
 
-      toast.success('Gold rate updated successfully');
+      toast.success('✅ Gold rate updated successfully');
       setUpdateRateDialog(false);
       setNewRate('');
       await loadDashboard();
@@ -338,23 +437,47 @@ export default function PulseDashboard() {
           <h1 className="text-3xl font-bold bg-gradient-to-r from-gold-600 via-gold-500 to-rose-500 bg-clip-text text-transparent">
             Pulse
           </h1>
-          <p className="text-muted-foreground">Today&apos;s business snapshot</p>
+          <p className="text-muted-foreground">Business snapshot</p>
         </div>
-        <Badge className="text-sm px-4 py-2">
-          {new Date().toLocaleDateString('en-IN', {
-            weekday: 'long',
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric',
-          })}
-        </Badge>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Label className="text-xs">Period</Label>
+            <Select value={timeFilter} onValueChange={(v) => setTimeFilter(v as any)}>
+              <SelectTrigger className="w-28">
+                <SelectValue placeholder="Period" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="DAY">Day</SelectItem>
+                <SelectItem value="WEEK">Week</SelectItem>
+                <SelectItem value="MONTH">Month</SelectItem>
+                <SelectItem value="YEAR">Year</SelectItem>
+                <SelectItem value="RANGE">Range</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {timeFilter === 'RANGE' && (
+            <div className="flex items-center gap-2">
+              <Input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} />
+              <span className="text-muted-foreground">to</span>
+              <Input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} />
+            </div>
+          )}
+          <Badge className="text-sm px-4 py-2">
+            {new Date().toLocaleDateString('en-IN', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+            })}
+          </Badge>
+        </div>
       </div>
 
       <Card className="jewel-card">
         <CardContent className="pt-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground mb-2">Today&apos;s Gold Rate (22K)</p>
+              <p className="text-sm text-muted-foreground mb-2">Gold Vault</p>
               <div className="flex items-baseline gap-2">
                 <span className="text-5xl font-bold gold-text">₹{(metrics?.currentRate?.rate ?? 0).toLocaleString()}</span>
                 <span className="text-xl text-muted-foreground">/gram</span>
@@ -382,7 +505,7 @@ export default function PulseDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">₹{(metrics?.todayCollections ?? 0).toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground mt-1">Today</p>
+            <p className="text-xs text-muted-foreground mt-1">{periodLabel}</p>
             <div className="flex items-center gap-1 mt-2">
               <TrendingUp className="w-3 h-3 text-green-600" />
               <span className="text-xs text-green-600">Live</span>
@@ -399,7 +522,7 @@ export default function PulseDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold gold-text">{(metrics?.goldAllocatedToday ?? 0).toFixed(4)} g</div>
-            <p className="text-xs text-muted-foreground mt-1">Today</p>
+            <p className="text-xs text-muted-foreground mt-1">{periodLabel}</p>
           </CardContent>
         </Card>
 
@@ -429,6 +552,30 @@ export default function PulseDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Plan Amount Overview */}
+      <Card className="jewel-card border-2 border-primary/20">
+        <CardHeader>
+          <CardTitle>Total Scheme Value</CardTitle>
+          <CardDescription>Active enrollment commitments across all plans</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-gold-100 to-gold-50 dark:from-gold-900/30 dark:to-gold-800/20">
+              <p className="text-xs text-muted-foreground mb-1">Total Plan Value</p>
+              <p className="text-2xl font-bold gold-text">₹{(metrics?.planAmountTotal ?? 0).toLocaleString()}</p>
+            </div>
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-100 to-blue-50 dark:from-blue-900/30 dark:to-blue-800/20">
+              <p className="text-xs text-muted-foreground mb-1">Active Enrollments</p>
+              <p className="text-2xl font-bold text-blue-600">{metrics?.totalActiveEnrollmentsAllTime ?? 0}</p>
+            </div>
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-orange-100 to-orange-50 dark:from-orange-900/30 dark:to-orange-800/20">
+              <p className="text-xs text-muted-foreground mb-1">Dues Outstanding</p>
+              <p className="text-2xl font-bold text-orange-600">{(metrics?.dueToday ?? 0) + (metrics?.overdueCount ?? 0)}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="jewel-card">
