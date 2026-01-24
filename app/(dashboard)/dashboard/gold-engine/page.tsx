@@ -43,7 +43,7 @@ export default function GoldEnginePage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [schemeDialogOpen, setSchemeDialogOpen] = useState(false);
   const [newRate, setNewRate] = useState({
-    karat: '22K',
+    karat: 'K22',
     rate_per_gram: '',
     notes: '',
   });
@@ -146,7 +146,7 @@ export default function GoldEnginePage() {
       }
 
       toast.success(`Gold rate updated: ₹${rateValue.toLocaleString()}/g for ${newRate.karat}`);
-      setNewRate({ karat: '22K', rate_per_gram: '', notes: '' });
+      setNewRate({ karat: 'K22', rate_per_gram: '', notes: '' });
       setDialogOpen(false);
       await loadGoldRates();
     } catch (error: any) {
@@ -214,9 +214,9 @@ export default function GoldEnginePage() {
   }
 
   const currentRates = {
-    '22K': rates.find(r => r.karat === '22K')?.rate_per_gram || 0,
-    '24K': rates.find(r => r.karat === '24K')?.rate_per_gram || 0,
-    '18K': rates.find(r => r.karat === '18K')?.rate_per_gram || 0,
+    'K22': rates.find(r => r.karat === 'K22')?.rate_per_gram || 0,
+    'K24': rates.find(r => r.karat === 'K24')?.rate_per_gram || 0,
+    'K18': rates.find(r => r.karat === 'K18')?.rate_per_gram || 0,
   };
 
   if (loading) {
@@ -335,9 +335,9 @@ export default function GoldEnginePage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="22K">22 Karat</SelectItem>
-                    <SelectItem value="24K">24 Karat</SelectItem>
-                    <SelectItem value="18K">18 Karat</SelectItem>
+                    <SelectItem value="K22">22 Karat</SelectItem>
+                    <SelectItem value="K24">24 Karat</SelectItem>
+                    <SelectItem value="K18">18 Karat</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -377,7 +377,7 @@ export default function GoldEnginePage() {
           <CardContent>
             <div className="flex items-baseline gap-2">
               <h2 className="text-4xl font-bold gold-gradient-shimmer bg-clip-text text-transparent">
-                ₹{currentRates['22K'].toLocaleString()}
+                ₹{currentRates['K22'].toLocaleString()}
               </h2>
               <span className="text-muted-foreground">/g</span>
             </div>
@@ -392,7 +392,7 @@ export default function GoldEnginePage() {
           <CardContent>
             <div className="flex items-baseline gap-2">
               <h2 className="text-4xl font-bold gold-text">
-                ₹{currentRates['24K'].toLocaleString()}
+                ₹{currentRates['K24'].toLocaleString()}
               </h2>
               <span className="text-muted-foreground">/g</span>
             </div>
@@ -407,7 +407,7 @@ export default function GoldEnginePage() {
           <CardContent>
             <div className="flex items-baseline gap-2">
               <h2 className="text-4xl font-bold gold-text">
-                ₹{currentRates['18K'].toLocaleString()}
+                ₹{currentRates['K18'].toLocaleString()}
               </h2>
               <span className="text-muted-foreground">/g</span>
             </div>

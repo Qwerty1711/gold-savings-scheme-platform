@@ -88,6 +88,8 @@ export default function SettingsPage() {
   
   // Store dialog state
   const [addStoreDialog, setAddStoreDialog] = useState(false);
+  const [editStoreDialog, setEditStoreDialog] = useState(false);
+  const [editingStore, setEditingStore] = useState<StoreLocation | null>(null);
   const [newStoreName, setNewStoreName] = useState('');
   const [newStoreCode, setNewStoreCode] = useState('');
   const [newStoreAddress, setNewStoreAddress] = useState('');
@@ -95,6 +97,10 @@ export default function SettingsPage() {
   const [newStoreState, setNewStoreState] = useState('');
   const [newStorePhone, setNewStorePhone] = useState('');
   const [addingStore, setAddingStore] = useState(false);
+  
+  // Edit staff dialog state
+  const [editStaffDialog, setEditStaffDialog] = useState(false);
+  const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
 
   // Only ADMIN can access Settings
   useEffect(() => {
@@ -144,6 +150,8 @@ export default function SettingsPage() {
         .order('created_at', { ascending: true });
 
       if (storesError) throw storesError;
+      
+      console.log('Loaded stores for retailer:', profile.retailer_id, storesData);
       setStores(storesData || []);
 
       // Load rate history (optional - function might not exist yet)
@@ -350,6 +358,96 @@ export default function SettingsPage() {
       setAddingStore(false);
     }
   }
+
+  function openEditStore(store: StoreLocation) {
+    setEditingStore(store);
+    setNewStoreName(store.store_name || store.name);
+    setNewStoreCode(store.code || '');
+    setNewStoreAddress(store.address || '');
+    setNewStorePhone(store.phone || '');
+    setEditStoreDialog(true);
+  }
+
+  async function updateStore() {
+    if (!editingStore) return;
+
+    setAddingStore(true);
+    try {
+      const { data, error } = await supabase
+        .from('stores')
+        .update({
+          store_name: newStoreName,
+          name: newStoreName,
+          code: newStoreCode || null,
+          address: newStoreAddress || null,
+          phone: newStorePhone || null,
+        })
+        .eq('id', editingStore.id)
+        .eq('retailer_id', profile?.retailer_id)
+        .select();
+
+      if (error) throw error;
+
+      toast.success('✅ Store updated successfully!');
+      setEditStoreDialog(false);
+      setEditingStore(null);
+      setNewStoreName('');
+      setNewStoreCode('');
+      setNewStoreAddress('');
+      setNewStorePhone('');
+      await loadSettings();
+    } catch (error: any) {
+      console.error('Error updating store:', error);
+      toast.error(`Failed to update store: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setAddingStore(false);
+    }
+  }
+
+  function openEditStaff(staff: StaffMember) {
+    setEditingStaff(staff);
+    setNewStaffName(staff.full_name);
+    setNewStaffPhone(staff.phone || '');
+    setNewStaffEmployeeId(staff.employee_id || '');
+    setNewStaffStoreId(staff.store_id || '');
+    setEditStaffDialog(true);
+  }
+
+  async function updateStaff() {
+    if (!editingStaff) return;
+
+    setAddingStaff(true);
+    try {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .update({
+          full_name: newStaffName,
+          phone: newStaffPhone || null,
+          employee_id: newStaffEmployeeId || null,
+          store_id: newStaffStoreId || null,
+        })
+        .eq('id', editingStaff.id)
+        .eq('retailer_id', profile?.retailer_id)
+        .select();
+
+      if (error) throw error;
+
+      toast.success('✅ Staff member updated successfully!');
+      setEditStaffDialog(false);
+      setEditingStaff(null);
+      setNewStaffName('');
+      setNewStaffPhone('');
+      setNewStaffEmployeeId('');
+      setNewStaffStoreId('');
+      await loadSettings();
+    } catch (error: any) {
+      console.error('Error updating staff:', error);
+      toast.error(`Failed to update staff: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setAddingStaff(false);
+    }
+  }
+
 
   async function toggleStoreStatus(storeId: string, currentStatus: boolean) {
     try {
@@ -559,6 +657,42 @@ export default function SettingsPage() {
                   </div>
                 </DialogContent>
               </Dialog>
+              
+              {/* Edit Store Dialog */}
+              <Dialog open={editStoreDialog} onOpenChange={setEditStoreDialog}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Edit Store Location</DialogTitle>
+                    <DialogDescription>Update store information</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label>Store Name *</Label>
+                      <Input value={newStoreName} onChange={(e) => setNewStoreName(e.target.value)} placeholder="Main Branch" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Store Code</Label>
+                      <Input value={newStoreCode} onChange={(e) => setNewStoreCode(e.target.value)} placeholder="MAIN" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Address</Label>
+                      <Input value={newStoreAddress} onChange={(e) => setNewStoreAddress(e.target.value)} placeholder="Street address" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Phone</Label>
+                      <Input value={newStorePhone} onChange={(e) => setNewStorePhone(e.target.value)} />
+                    </div>
+                    <div className="flex justify-end gap-2 pt-2">
+                      <Button variant="ghost" onClick={() => setEditStoreDialog(false)}>
+                        Cancel
+                      </Button>
+                      <Button className="gold-gradient text-white" onClick={updateStore} disabled={addingStore}>
+                        {addingStore ? 'Updating...' : 'Update Store'}
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
@@ -587,9 +721,18 @@ export default function SettingsPage() {
                           <p className="text-xs text-muted-foreground">📞 {store.phone}</p>
                         )}
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEditStore(store)}
+                        >
+                          <Edit className="w-4 h-4 mr-1" />
+                          Edit
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                         onClick={() => toggleStoreStatus(store.id, store.is_active)}
                       >
                         {store.is_active ? 'Deactivate' : 'Activate'}
@@ -675,6 +818,63 @@ export default function SettingsPage() {
                   </div>
                 </DialogContent>
               </Dialog>
+              
+              {/* Edit Staff Dialog */}
+              <Dialog open={editStaffDialog} onOpenChange={setEditStaffDialog}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Edit Staff Member</DialogTitle>
+                    <DialogDescription>Update staff member details</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label>Full Name *</Label>
+                      <Input value={newStaffName} onChange={(e) => setNewStaffName(e.target.value)} placeholder="Staff member's full name" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Phone</Label>
+                      <Input value={newStaffPhone} onChange={(e) => setNewStaffPhone(e.target.value)} placeholder="+91 98765 43210" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Employee ID</Label>
+                      <Input value={newStaffEmployeeId} onChange={(e) => setNewStaffEmployeeId(e.target.value)} placeholder="Optional employee ID" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Assign to Store</Label>
+                      <Select value={newStaffStoreId || undefined} onValueChange={(val) => setNewStaffStoreId(val || '')}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select store (optional)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {stores.filter(s => s.is_active).map(store => (
+                            <SelectItem key={store.id} value={store.id}>
+                              {store.store_name || store.name} {store.code ? `(${store.code})` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {newStaffStoreId && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setNewStaffStoreId('')}
+                          className="text-xs"
+                        >
+                          Clear store selection
+                        </Button>
+                      )}
+                    </div>
+                    <div className="flex justify-end gap-2 pt-2">
+                      <Button variant="ghost" onClick={() => setEditStaffDialog(false)}>
+                        Cancel
+                      </Button>
+                      <Button className="gold-gradient text-white" onClick={updateStaff} disabled={addingStaff}>
+                        {addingStaff ? 'Updating...' : 'Update Staff'}
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
@@ -697,16 +897,25 @@ export default function SettingsPage() {
                           </p>
                         )}
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
                         <Badge variant="outline">{staff.role}</Badge>
                         {staff.id !== profile?.id && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeStaffMember(staff.id)}
-                          >
-                            <Trash2 className="w-4 h-4 text-red-600" />
-                          </Button>
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openEditStaff(staff)}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeStaffMember(staff.id)}
+                            >
+                              <Trash2 className="w-4 h-4 text-red-600" />
+                            </Button>
+                          </>
                         )}
                       </div>
                     </div>

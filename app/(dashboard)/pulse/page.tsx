@@ -196,7 +196,7 @@ export default function PulseDashboard() {
           .from('gold_rates')
           .select('rate_per_gram, karat, effective_from')
           .eq('retailer_id', retailerId)
-          .eq('karat', '22K')
+          .eq('karat', 'K22')
           .order('effective_from', { ascending: false })
           .limit(1)
           .maybeSingle(),
@@ -258,7 +258,7 @@ export default function PulseDashboard() {
       const currentRate = rateResult.data
         ? {
             rate: safeNumber(rateResult.data.rate_per_gram),
-            karat: (rateResult.data as any).karat ?? '22K',
+            karat: (rateResult.data as any).karat ?? 'K22',
             validFrom: (rateResult.data as any).effective_from ?? new Date().toISOString(),
           }
         : null;
@@ -398,7 +398,7 @@ export default function PulseDashboard() {
         .from('gold_rates')
         .insert({
           retailer_id: profile.retailer_id,
-          karat: '22K',
+          karat: 'K22',
           rate_per_gram: rate,
           effective_from: new Date().toISOString(),
         })
