@@ -49,10 +49,9 @@ type StaffMember = {
 type StoreLocation = {
   id: string;
   name: string;
+  store_name: string; // Actual column name in database
   code?: string | null;
   address?: string | null;
-  city?: string | null;
-  state?: string | null;
   phone?: string | null;
   is_active: boolean;
   created_at: string;
@@ -194,17 +193,34 @@ export default function SettingsPage() {
         .select();
 
       if (error) {
-        console.error('Supabase error:', error);
+        console.error('Supabase UPDATE error:', error);
         throw error;
       }
-      console.log('Update successful:', data);
       
-      // Update local state with saved data
-      if (data && data[0]) {
-        setRetailerSettings(data[0]);
+      if (!data || data.length === 0) {
+        console.error('Update returned no data - possible RLS policy issue');
+        throw new Error('Update succeeded but returned no data. Check RLS policies.');
       }
       
+      console.log('Update successful! Returned data:', data);
+      
+      // Update local state with saved data
+      setRetailerSettings(data[0]);
+      
       toast.success('✅ Retailer information saved successfully!');
+      
+      // Verify it's actually in the database by reading it back
+      const { data: verifyData, error: verifyError } = await supabase
+        .from('retailers')
+        .select('*')
+        .eq('id', profile.retailer_id)
+        .single();
+      
+      if (verifyError) {
+        console.error('Verification read failed:', verifyError);
+      } else {
+        console.log('Verified data in database:', verifyData);
+      }
     } catch (error: any) {
       console.error('Error updating settings:', error);
       toast.error(`Failed to save: ${error?.message || 'Unknown error'}`);
@@ -294,16 +310,16 @@ export default function SettingsPage() {
       return;
     }
 
-    console.log('Adding store:', { newStoreName, newStoreCode, newStoreAddress, newStoreCity, newStoreState, newStorePhone });
+    console.log('Adding store:', { newStoreName, newStoreCode, newStoreAddress, newStorePhone });
     setAddingStore(true);
     try {
+      // Use correct column name: store_name (not name)
       const { data, error } = await supabase.from('stores').insert({
         retailer_id: profile.retailer_id,
-        name: newStoreName,
+        store_name: newStoreName,
+        name: newStoreName, // This column also exists with a default
         code: newStoreCode || null,
         address: newStoreAddress || null,
-        city: newStoreCity || null,
-        state: newStoreState || null,
         phone: newStorePhone || null,
         is_active: true,
       }).select();
@@ -554,7 +570,7 @@ export default function SettingsPage() {
                     >
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <h3 className="font-medium">{store.name}</h3>
+                          <h3 className="font-medium">{store.store_name || store.name}</h3>
                           {store.code && (
                             <Badge variant="outline" className="text-xs">{store.code}</Badge>
                           )}
@@ -632,7 +648,7 @@ export default function SettingsPage() {
                         <SelectContent>
                           {stores.filter(s => s.is_active).map(store => (
                             <SelectItem key={store.id} value={store.id}>
-                              {store.name} {store.code ? `(${store.code})` : ''}
+                              {store.store_name || store.name} {store.code ? `(${store.code})` : ''}
                             </SelectItem>
                           ))}
                         </SelectContent>
