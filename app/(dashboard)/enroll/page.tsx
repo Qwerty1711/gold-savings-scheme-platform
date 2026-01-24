@@ -77,17 +77,28 @@ function computeFirstDueDate(startDate: Date, billingDayOfMonth: number): string
   return toISODate(target);
 }
 
+type Customer = {
+  id: string;
+  full_name: string;
+  phone: string;
+  customer_code: string;
+};
+
 export default function EnrollmentWizard() {
   const { profile } = useAuth();
   const router = useRouter();
 
-  const [step, setStep] = useState(1);
+  const [enrollmentType, setEnrollmentType] = useState<'NEW' | 'EXISTING' | null>(null);
+  const [step, setStep] = useState(0); // 0 = type selection, 1 = customer details (new only), 2 = plan selection
   const [loading, setLoading] = useState(false);
 
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [source, setSource] = useState('WALK_IN');
   const [existingCustomer, setExistingCustomer] = useState<any>(null);
+
+  const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
 
   const [plans, setPlans] = useState<Plan[]>([]);
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
@@ -101,8 +112,25 @@ export default function EnrollmentWizard() {
     if (!profile?.retailer_id) return;
     void loadPlansAndStaff();
     void loadStores();
+    void loadAllCustomers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.retailer_id]);
+
+  async function loadAllCustomers() {
+    if (!profile?.retailer_id) return;
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .select('id, full_name, phone, customer_code')
+        .eq('retailer_id', profile.retailer_id)
+        .order('full_name', { ascending: true });
+
+      if (error) throw error;
+      setAllCustomers((data || []) as Customer[]);
+    } catch (error) {
+      console.error('Error loading customers:', error);
+    }
+  }
 
   async function loadStores() {
     if (!profile?.retailer_id) return;
@@ -183,6 +211,15 @@ export default function EnrollmentWizard() {
     }
   }
 
+  function handleEnrollmentTypeSelection(type: 'NEW' | 'EXISTING') {
+    setEnrollmentType(type);
+    if (type === 'NEW') {
+      setStep(1); // Go to customer details
+    } else {
+      setStep(2); // Go directly to plan selection
+    }
+  }
+
   async function handleNextStep() {
     if (!profile?.retailer_id) {
       toast.error('Retailer profile not loaded. Please re-login.');
@@ -190,6 +227,7 @@ export default function EnrollmentWizard() {
     }
 
     if (step === 1) {
+      // Validate customer details for NEW customer
       const digits = customerPhone.replace(/\D/g, '');
       if (!digits || digits.length < 10) {
         toast.error('Please enter a valid phone number');
@@ -239,34 +277,68 @@ export default function EnrollmentWizard() {
       return;
     }
 
-    if (!selectedStore) {
-      toast.error('Please select a store');
-      return;
-    }
+    if (!selDetermine customer ID based on enrollment type
+      let customerId: string;
+      let finalCustomerName: string;
 
-    // Note: max_commitment_override removed (using scheme_templates now)
+      if (enrollmentType === 'EXISTING') {
+        // Use selected existing customer
+        if (!selectedCustomerId) {
+          toast.error('Please select a customer');
+          return;
+        }
+        customerId = selectedCustomerId;
+        const customer = allCustomers.find(c => c.id === selectedCustomerId);
+        finalCustomerName = customer?.full_name || 'Customer';
+      } else {
+        // NEW customer - check if exists or create
+        let existingId = existingCustomer?.id;
 
-    setLoading(true);
+        if (!existingId) {
+          // Double-check if customer exists before inserting
+          const { data: existingCheck, error: checkError } = await supabase
+            .from('customers')
+            .select('id')
+            .eq('retailer_id', profile.retailer_id)
+            .eq('phone', customerPhone)
+            .maybeSingle();
 
-    try {
-      // 1) Ensure customer exists
-      let customerId = existingCustomer?.id;
+          if (checkError) throw checkError;
 
-      if (!customerId) {
-        const { data: newCustomer, error: customerError } = await supabase
-          .from('customers')
-          .insert({
-            retailer_id: profile.retailer_id,
-            phone: customerPhone,
-            full_name: customerName,
-            customer_code: `CUST${Date.now()}`,
-            store_id: selectedStore,
-          })
-          .select()
-          .single();
+          if (existingCheck) {
+            // Customer already exists, use their ID
+            existingId = existingCheck.id;
+          } else {
+            // Create new customer
+            const { data: newCustomer, error: customerError } = await supabase
+              .from('customers')
+              .insert({
+                retailer_id: profile.retailer_id,
+                phone: customerPhone,
+                full_name: customerName,
+                customer_code: `CUST${Date.now()}`,
+                store_id: selectedStore,
+              })
+              .select()
+              .single();
 
-        if (customerError) throw customerError;
-        customerId = newCustomer.id;
+            if (customerError) throw customerError;
+            existingId = newCustomer.id;
+          }
+        }
+
+        customerId = existingId;
+        finalCustomerName = customerName;     phone: customerPhone,
+              full_name: customerName,
+              customer_code: `CUST${Date.now()}`,
+              store_id: selectedStore,
+            })
+            .select()
+            .single();
+
+          if (customerError) throw customerError;
+          customerId = newCustomer.id;
+        }
       }
 
       // 2) Create enrollment (NOT schemes)
@@ -299,9 +371,8 @@ export default function EnrollmentWizard() {
           created_by: profile.id,
         } as any)
         .select()
-        .single();
-
-      if (enrollErr) throw enrollErr;
+        .single();finalCustomerName}!`);
+      router.push('/dashboard/schemes'
 
       // 3) Create first billing month row (minimal, avoids relying on RPC)
       const billingMonth = computeFirstBillingMonth(startDate);
@@ -314,23 +385,34 @@ export default function EnrollmentWizard() {
         primary_paid: false,
         status: 'DUE',
       });
+// Get display name for step 2
+  const displayCustomerName = enrollmentType === 'EXISTING' 
+    ? allCustomers.find(c => c.id === selectedCustomerId)?.full_name || ''
+    : customerName;
 
-      if (billErr) throw billErr;
+  return (
+    <div className="max-w-4xl mx-auto space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold bg-gradient-to-r from-gold-600 via-gold-500 to-rose-500 bg-clip-text text-transparent">
+          {enrollmentType === 'EXISTING' ? 'Enroll Existing Customer' : 'Enroll New Customer'}
+        </h1>
+        <p className="text-muted-foreground">
+          {step === 0 ? 'Choose enrollment type' : enrollmentType === 'NEW' ? '2-step enrollment process' : 'Select plan for existing customer'}
+        </p>
+      </div>
 
-      toast.success(`Successfully enrolled ${customerName}!`);
-      // Use whatever route you actually have; leaving your original intent intact:
-      router.push(`/dashboard/customers/${customerId}`);
-    } catch (error: any) {
-      console.error('Enrollment error:', error);
-      toast.error(error.message || 'Failed to enroll customer');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const selectedPlanData = plans.find((p) => p.id === selectedPlan);
-  const selectedMin = selectedPlanData ? getMinCommitment(selectedPlanData) : 0;
-
+      {/* Step Indicator - Only show for NEW customer flow */}
+      {enrollmentType === 'NEW' && step > 0 && (
+        <div className="flex items-center gap-4 mb-8">
+          <div className={`flex items-center gap-2 ${step >= 1 ? 'text-gold-600' : 'text-muted-foreground'}`}>
+            <div
+              className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
+                step >= 1 ? 'jewel-gradient text-white' : 'bg-muted'
+              }`}
+            >
+              {step > 1 ? <CheckCircle className="w-5 h-5" /> : '1'}
+            </div>
+  
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
@@ -361,8 +443,57 @@ export default function EnrollmentWizard() {
           <span className="font-medium">Plan Selection</span>
         </div>
       </div>
+      )}
 
-      {step === 1 && (
+      {/* Step 0: Choose Enrollment Type */}
+      {step === 0 && (
+        <Card className="jewel-card">
+          <CardHeader>
+            <CardTitle>Choose Enrollment Type</CardTitle>
+            <CardDescription>Select whether to enroll a new or existing customer</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <button
+                onClick={() => handleEnrollmentTypeSelection('NEW')}
+                className="group relative p-8 rounded-2xl border-2 border-muted hover:border-gold-400 transition-all text-left hover:shadow-lg"
+              >
+                <div className="absolute top-4 right-4">
+                  <User className="w-8 h-8 text-gold-500" />
+                </div>
+                <h3 className="text-xl font-bold mb-2">New Customer</h3>
+                <p className="text-muted-foreground text-sm">
+                  Register a new customer and enroll them in a savings plan
+                </p>
+                <div className="mt-4 flex items-center gap-2 text-gold-600 font-medium">
+                  <span>Get Started</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </button>
+
+              <button
+                onClick={() => handleEnrollmentTypeSelection('EXISTING')}
+                className="group relative p-8 rounded-2xl border-2 border-muted hover:border-gold-400 transition-all text-left hover:shadow-lg"
+              >
+                <div className="absolute top-4 right-4">
+                  <Sparkles className="w-8 h-8 text-gold-500" />
+                </div>
+                <h3 className="text-xl font-bold mb-2">Existing Customer</h3>
+                <p className="text-muted-foreground text-sm">
+                  Enroll an existing customer in a new savings plan
+                </p>
+                <div className="mt-4 flex items-center gap-2 text-gold-600 font-medium">
+                  <span>Select Customer</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Step 1: Customer Details (NEW customers only) */}
+      {step === 1 && enrollmentType === 'NEW' && (
         <Card className="jewel-card">
           <CardHeader>
             <CardTitle>Customer Information</CardTitle>
@@ -431,12 +562,31 @@ export default function EnrollmentWizard() {
         </Card>
       )}
 
+      {/* Step 2: Plan Selection (both NEW and EXISTING) */}
       {step === 2 && (
         <div className="space-y-6">
           <Card className="jewel-card">
             <CardHeader>
               <CardTitle>Select Plan</CardTitle>
-              <CardDescription>Choose a savings plan for {customerName}</CardDescription>
+              <CardDescription>
+                Choose a savings plan for{' '}
+                {enrollmentType === 'EXISTING' ? (
+                  <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
+                    <SelectTrigger className="inline-flex w-auto min-w-[200px] h-auto py-0 px-2 border-0 border-b-2 border-gold-400 rounded-none bg-transparent font-semibold text-gold-600">
+                      <SelectValue placeholder="Select Customer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allCustomers.map((customer) => (
+                        <SelectItem key={customer.id} value={customer.id}>
+                          {customer.full_name} ({customer.phone})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <span className="font-semibold text-gold-600">{displayCustomerName}</span>
+                )}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <RadioGroup value={selectedPlan} onValueChange={setSelectedPlan}>
@@ -542,14 +692,27 @@ export default function EnrollmentWizard() {
           </Card>
 
           <div className="flex gap-4">
-            <Button variant="outline" onClick={() => setStep(1)} className="flex-1" disabled={loading}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (enrollmentType === 'NEW') {
+                  setStep(1);
+                } else {
+                  setStep(0);
+                  setEnrollmentType(null);
+                  setSelectedCustomerId('');
+                }
+              }}
+              className="flex-1"
+              disabled={loading}
+            >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back
             </Button>
             <Button
               onClick={handleNextStep}
               className="flex-1 jewel-gradient text-white hover:opacity-90"
-              disabled={loading || !selectedPlan || !commitmentAmount || !selectedStore}
+              disabled={loading || !selectedPlan || !commitmentAmount || !selectedStore || (enrollmentType === 'EXISTING' && !selectedCustomerId)}
             >
               {loading ? 'Enrolling...' : 'Complete Enrollment'}
               <Sparkles className="w-4 h-4 ml-2" />

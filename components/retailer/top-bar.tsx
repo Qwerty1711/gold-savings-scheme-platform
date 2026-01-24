@@ -15,6 +15,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/lib/contexts/auth-context';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export function TopBar() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -30,7 +31,7 @@ export function TopBar() {
     <div className="sticky top-0 z-50 w-full backdrop-blur-2xl bg-white/85 dark:bg-zinc-900/85 border-b border-gold-300/40 dark:border-gold-500/30">
       <div className="flex items-center justify-between px-8 py-5 gap-4">
         {/* Logo Section - Premium */}
-        <div className="flex items-center gap-4 flex-shrink-0">
+        <Link href="/pulse" className="flex items-center gap-4 flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity">
           <div className="relative w-12 h-12 rounded-2xl luxury-gold-gradient flex items-center justify-center overflow-hidden group hover:shadow-lg transition-shadow">
             <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white/20"></div>
             <span className="text-xl font-bold text-white drop-shadow-lg">G</span>
@@ -39,7 +40,7 @@ export function TopBar() {
             <h2 className="text-xl font-bold gold-text">GoldSave</h2>
             <p className="text-xs font-medium text-gold-600 dark:text-gold-400">Premium Suite</p>
           </div>
-        </div>
+        </Link>
 
         {/* Search Bar - Luxury Style */}
         <div className="relative flex-1 max-w-md">
