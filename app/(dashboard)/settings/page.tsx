@@ -598,12 +598,11 @@ export default function SettingsPage() {
                     </div>
                     <div className="space-y-2">
                       <Label>Assign to Store</Label>
-                      <Select value={newStaffStoreId} onValueChange={setNewStaffStoreId}>
+                      <Select value={newStaffStoreId || undefined} onValueChange={(val) => setNewStaffStoreId(val || '')}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select store (optional)" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">No store assignment</SelectItem>
                           {stores.filter(s => s.is_active).map(store => (
                             <SelectItem key={store.id} value={store.id}>
                               {store.name} {store.code ? `(${store.code})` : ''}
@@ -611,6 +610,16 @@ export default function SettingsPage() {
                           ))}
                         </SelectContent>
                       </Select>
+                      {newStaffStoreId && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setNewStaffStoreId('')}
+                          className="text-xs"
+                        >
+                          Clear store selection
+                        </Button>
+                      )}
                     </div>
                     <div className="flex justify-end gap-2 pt-2">
                       <Button variant="ghost" onClick={() => setAddStaffDialog(false)}>
