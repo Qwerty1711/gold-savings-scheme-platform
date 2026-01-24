@@ -147,20 +147,26 @@ export default function SettingsPage() {
       if (storesError) throw storesError;
       setStores(storesData || []);
 
-      // Load rate history
-      const { data: rateData, error: rateError } = await supabase
-        .rpc('get_rate_history', {
-          p_retailer_id: profile.retailer_id,
-          p_karat: null, // Get all karats
-          p_limit: 50
-        });
+      // Load rate history (optional - function might not exist yet)
+      try {
+        const { data: rateData, error: rateError } = await supabase
+          .rpc('get_rate_history', {
+            p_retailer_id: profile.retailer_id,
+            p_karat: null, // Get all karats
+            p_limit: 50
+          });
 
-      if (!rateError && rateData) {
-        setRateHistory(rateData || []);
+        if (!rateError && rateData) {
+          setRateHistory(rateData || []);
+        }
+      } catch (rpcError) {
+        // RPC function might not exist yet, that's okay
+        console.log('Rate history not available:', rpcError);
+        setRateHistory([]);
       }
     } catch (error) {
       console.error('Error loading settings:', error);
-      toast.error('Failed to load settings');
+      // Don't show error toast, just log it
     } finally {
       setLoading(false);
     }
@@ -192,11 +198,16 @@ export default function SettingsPage() {
         throw error;
       }
       console.log('Update successful:', data);
-      toast.success('✅ Retailer settings saved');
-      await loadSettings();
+      
+      // Update local state with saved data
+      if (data && data[0]) {
+        setRetailerSettings(data[0]);
+      }
+      
+      toast.success('✅ Retailer information saved successfully!');
     } catch (error: any) {
       console.error('Error updating settings:', error);
-      toast.error(error?.message || 'Failed to update settings');
+      toast.error(`Failed to save: ${error?.message || 'Unknown error'}`);
     } finally {
       setSavingRetailer(false);
     }
@@ -233,8 +244,23 @@ export default function SettingsPage() {
         throw error;
       }
       console.log('Staff added successfully:', data);
-      toast.success('✅ Staff member added');
+      
+      toast.success('✅ Staff member added successfully!');
+      
+      // Reset form
       setNewStaffName('');
+      setNewStaffPhone('');
+      setNewStaffEmployeeId('');
+      setNewStaffStoreId('');
+      setAddStaffDialog(false);
+      
+      // Reload staff list
+      await loadSettings();
+    } catch (error: any) {
+      console.error('Error adding staff:', error);
+      toast.error(`Failed to add staff: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setAddingStaff(false);
       setNewStaffPhone('');
       setNewStaffEmployeeId('');
       setNewStaffStoreId('');
@@ -297,7 +323,10 @@ export default function SettingsPage() {
         throw error;
       }
       console.log('Store added successfully:', data);
-      toast.success('✅ Store location added');
+      
+      toast.success('✅ Store location added successfully!');
+      
+      // Reset form
       setNewStoreName('');
       setNewStoreCode('');
       setNewStoreAddress('');
@@ -305,10 +334,12 @@ export default function SettingsPage() {
       setNewStoreState('');
       setNewStorePhone('');
       setAddStoreDialog(false);
+      
+      // Reload stores list
       await loadSettings();
     } catch (error: any) {
       console.error('Error adding store:', error);
-      toast.error(error?.message || 'Failed to add store');
+      toast.error(`Failed to add store: ${error?.message || 'Unknown error'}`);
     } finally {
       setAddingStore(false);
     }

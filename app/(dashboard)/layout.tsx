@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from '@/lib/contexts/auth-context';
 import { TopBar } from '@/components/retailer/top-bar';
 import { IconDock } from '@/components/retailer/icon-dock';
+import { Toaster } from '@/components/ui/sonner';
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const { user, profile, loading } = useAuth();
@@ -47,6 +48,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
+      <Toaster position="top-right" richColors />
     </div>
   );
 }
