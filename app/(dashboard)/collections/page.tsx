@@ -26,6 +26,16 @@ type Customer = {
   phone: string | null;
 };
 
+type Enrollment = {
+  id: string;
+  plan_id: string;
+  commitment_amount: number;
+  store_id: string | null;
+  plan_name: string;
+  duration_months: number;
+  bonus_percentage: number;
+};
+
 type GoldRate = {
   id: string;
   karat: string;
@@ -48,13 +58,23 @@ type Store = {
   code: string | null;
 };
 
+type MonthlyPaymentInfo = {
+  billing_month: string;
+  commitment_amount: number;
+  total_paid: number;
+  remaining: number;
+  is_met: boolean;
+};
+
 const QUICK_AMOUNTS = [3000, 5000, 10000, 25000];
 
 export default function CollectionsPage() {
   const { profile } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
+  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [selectedEnrollmentId, setSelectedEnrollmentId] = useState('');
   const [selectedStore, setSelectedStore] = useState('');
   const [goldRate, setGoldRate] = useState<GoldRate | null>(null);
   const [amount, setAmount] = useState('');
@@ -62,6 +82,7 @@ export default function CollectionsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [loadingCustomers, setLoadingCustomers] = useState(true);
   const [transactions, setTransactions] = useState<Txn[]>([]);
+  const [monthlyPaymentInfo, setMonthlyPaymentInfo] = useState<MonthlyPaymentInfo | null>(null);
 
   useEffect(() => {
     void loadStores();
@@ -94,9 +115,21 @@ export default function CollectionsPage() {
 
   useEffect(() => {
     if (selectedCustomerId && goldRate) {
+      void loadEnrollments(selectedCustomerId);
       void loadTransactions(selectedCustomerId);
+    } else {
+      setEnrollments([]);
+      setSelectedEnrollmentId('');
     }
   }, [selectedCustomerId, goldRate?.id]);
+
+  useEffect(() => {
+    if (selectedEnrollmentId) {
+      void loadMonthlyPaymentInfo(selectedEnrollmentId);
+    } else {
+      setMonthlyPaymentInfo(null);
+    }
+  }, [selectedEnrollmentId]);
 
   const calculatedGrams = useMemo(() => {
     const amountNum = parseFloat(amount);
@@ -156,6 +189,98 @@ export default function CollectionsPage() {
     }
   }
 
+  async function loadEnrollments(customerId: string) {
+    if (!profile?.retailer_id) return;
+    try {
+      const { data, error } = await supabase
+        .from('enrollments')
+        .select(`
+          id,
+          plan_id,
+          commitment_amount,
+          store_id,
+          plan:scheme_templates!plan_id (
+            name,
+            duration_months,
+            bonus_percentage
+          )
+        `)
+        .eq('retailer_id', profile.retailer_id)
+        .eq('customer_id', customerId)
+        .eq('status', 'ACTIVE');
+
+      if (error) throw error;
+      
+      const enrollmentsList = (data || []).map((e: any) => ({
+        id: e.id,
+        plan_id: e.plan_id,
+        commitment_amount: e.commitment_amount,
+        store_id: e.store_id,
+        plan_name: e.plan?.name || 'Unknown Plan',
+        duration_months: e.plan?.duration_months || 0,
+        bonus_percentage: e.plan?.bonus_percentage || 0,
+      }));
+
+      setEnrollments(enrollmentsList as Enrollment[]);
+      
+      // Auto-select if only one enrollment
+      if (enrollmentsList.length === 1) {
+        setSelectedEnrollmentId(enrollmentsList[0].id);
+        // Auto-select enrolled store
+        if (enrollmentsList[0].store_id) {
+          setSelectedStore(enrollmentsList[0].store_id);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading enrollments:', error);
+      toast.error('Failed to load customer enrollments');
+    }
+  }
+
+  async function loadMonthlyPaymentInfo(enrollmentId: string) {
+    if (!profile?.retailer_id) return;
+    
+    const selectedEnrollment = enrollments.find(e => e.id === enrollmentId);
+    if (!selectedEnrollment) return;
+
+    try {
+      // Get current billing month (first day of current month)
+      const now = new Date();
+      const currentBillingMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const billingMonthStr = currentBillingMonth.toISOString().split('T')[0];
+
+      // Calculate total paid this month for this enrollment
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
+
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('amount_paid')
+        .eq('retailer_id', profile.retailer_id)
+        .eq('enrollment_id', enrollmentId)
+        .eq('txn_type', 'PRIMARY_INSTALLMENT')
+        .eq('payment_status', 'SUCCESS')
+        .gte('paid_at', startOfMonth)
+        .lte('paid_at', endOfMonth);
+
+      if (error) throw error;
+
+      const totalPaid = (data || []).reduce((sum, t) => sum + (t.amount_paid || 0), 0);
+      const remaining = Math.max(0, selectedEnrollment.commitment_amount - totalPaid);
+      const isMet = totalPaid >= selectedEnrollment.commitment_amount;
+
+      setMonthlyPaymentInfo({
+        billing_month: billingMonthStr,
+        commitment_amount: selectedEnrollment.commitment_amount,
+        total_paid: totalPaid,
+        remaining,
+        is_met: isMet,
+      });
+    } catch (error) {
+      console.error('Error loading monthly payment info:', error);
+    }
+  }
+
 
 
   async function recordPayment() {
@@ -165,6 +290,10 @@ export default function CollectionsPage() {
     }
     if (!selectedCustomerId) {
       toast.error('Select a customer');
+      return;
+    }
+    if (!selectedEnrollmentId) {
+      toast.error('Select an enrollment/plan');
       return;
     }
     if (!goldRate) {
@@ -178,6 +307,16 @@ export default function CollectionsPage() {
       return;
     }
 
+    // Validate against monthly commitment if not yet met
+    if (monthlyPaymentInfo && !monthlyPaymentInfo.is_met) {
+      if (amountNum < monthlyPaymentInfo.remaining) {
+        toast.error(
+          `Minimum payment required: ₹${monthlyPaymentInfo.remaining.toLocaleString()} to meet monthly commitment of ₹${monthlyPaymentInfo.commitment_amount.toLocaleString()}`
+        );
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
       const gramsAllocated = amountNum / goldRate.rate_per_gram;
@@ -185,6 +324,7 @@ export default function CollectionsPage() {
       const { error: txnError } = await supabase.from('transactions').insert({
         retailer_id: profile.retailer_id,
         customer_id: selectedCustomerId,
+        enrollment_id: selectedEnrollmentId,
         amount_paid: amountNum,
         rate_per_gram_snapshot: goldRate.rate_per_gram,
         gold_rate_id: goldRate.id,
@@ -205,6 +345,7 @@ export default function CollectionsPage() {
       setAmount('');
       setMode('CASH');
       await loadTransactions(selectedCustomerId);
+      await loadMonthlyPaymentInfo(selectedEnrollmentId);
     } catch (error: any) {
       console.error('Error recording payment:', error);
       toast.error(error?.message || 'Failed to record payment');
@@ -261,7 +402,7 @@ export default function CollectionsPage() {
             {/* Customer Selection */}
             <div className="space-y-2">
               <Label>Customer *</Label>
-              <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
+              <Select value={selectedCustomerId || undefined} onValueChange={setSelectedCustomerId}>
                 <SelectTrigger>
                   <SelectValue placeholder={loadingCustomers ? 'Loading...' : 'Choose customer'} />
                 </SelectTrigger>
@@ -275,11 +416,57 @@ export default function CollectionsPage() {
               </Select>
             </div>
 
-            {/* Store Selection */}
-            {stores.length > 1 && (
+            {/* Enrollment/Plan Selection */}
+            {selectedCustomerId && enrollments.length > 0 && (
               <div className="space-y-2">
-                <Label>Store Location</Label>
-                <Select value={selectedStore} onValueChange={setSelectedStore}>
+                <Label>Select Plan/Enrollment *</Label>
+                <Select value={selectedEnrollmentId || undefined} onValueChange={setSelectedEnrollmentId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose enrolled plan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {enrollments.map((enrollment) => (
+                      <SelectItem key={enrollment.id} value={enrollment.id}>
+                        {enrollment.plan_name} - ₹{enrollment.commitment_amount.toLocaleString()}/month ({enrollment.duration_months}m • {enrollment.bonus_percentage}% bonus)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Monthly Commitment Status */}
+            {monthlyPaymentInfo && (
+              <Card className={`${monthlyPaymentInfo.is_met ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
+                <CardContent className="pt-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Monthly Commitment:</span>
+                      <span className="font-bold">₹{monthlyPaymentInfo.commitment_amount.toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Paid This Month:</span>
+                      <span className="font-semibold text-green-600">₹{monthlyPaymentInfo.total_paid.toLocaleString()}</span>
+                    </div>
+                    {!monthlyPaymentInfo.is_met && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Remaining:</span>
+                        <span className="font-semibold text-amber-600">₹{monthlyPaymentInfo.remaining.toLocaleString()}</span>
+                      </div>
+                    )}
+                    <Badge className={monthlyPaymentInfo.is_met ? 'bg-green-600' : 'bg-amber-600'}>
+                      {monthlyPaymentInfo.is_met ? '✓ Commitment Met' : '⚠ Commitment Pending'}
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Store Selection */}
+            {stores.length > 1 && selectedEnrollmentId && (
+              <div className="space-y-2">
+                <Label>Store Collected</Label>
+                <Select value={selectedStore || undefined} onValueChange={setSelectedStore}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select store (optional)" />
                   </SelectTrigger>
@@ -294,7 +481,7 @@ export default function CollectionsPage() {
               </div>
             )}
 
-            {selectedCustomerId && (
+            {selectedCustomerId && selectedEnrollmentId && (
               <>
                 {/* Quick Amount Buttons */}
                 <div className="space-y-2">
