@@ -244,7 +244,7 @@ export default function PulseDashboard() {
         // All active enrollments (for plan total computation)
         supabase
           .from('enrollments')
-          .select('id, scheme_id, status')
+          .select('id, plan_id, status')
           .eq('retailer_id', retailerId)
           .eq('status', 'ACTIVE'),
 
@@ -278,7 +278,7 @@ export default function PulseDashboard() {
         });
       });
       const planAmountTotal = (activeEnrollmentsAll.data || []).reduce((sum: number, e: any) => {
-        const s = schemesMap.get(String(e.scheme_id));
+        const s = schemesMap.get(String(e.plan_id));
         if (!s) return sum;
         return sum + s.installment_amount * s.duration_months;
       }, 0);

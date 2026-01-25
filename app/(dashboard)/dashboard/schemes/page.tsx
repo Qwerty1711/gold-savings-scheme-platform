@@ -29,9 +29,9 @@ type Customer = {
 
 type Plan = {
   id: string;
-  plan_name: string;
-  monthly_amount: number;
-  tenure_months: number;
+  name: string;
+  installment_amount: number;
+  duration_months: number;
   karat: string;
 };
 
@@ -46,7 +46,7 @@ type Enrollment = {
   created_at: string;
 
   customers: Customer | null;
-  plans: Plan | null;
+  scheme_templates: Plan | null;
 };
 
 type Txn = {
@@ -118,11 +118,11 @@ export default function SchemesPage() {
             full_name,
             phone
           ),
-          plans (
+          scheme_templates (
             id,
-            plan_name,
-            monthly_amount,
-            tenure_months,
+            name,
+            installment_amount,
+            duration_months,
             karat
           )
         `)
@@ -244,8 +244,8 @@ export default function SchemesPage() {
       const exportData = filtered.map((e) => ({
         'Customer Name': e.customers?.full_name || '',
         'Phone': e.customers?.phone || '',
-        'Plan': e.plans?.plan_name || '',
-        'Monthly Amount': e.commitment_amount || e.plans?.monthly_amount || 0,
+        'Plan': e.scheme_templates?.name || '',
+        'Monthly Amount': e.commitment_amount || e.scheme_templates?.installment_amount || 0,
         'Status': e.status,
         'Start Date': new Date(e.start_date).toLocaleDateString(),
         'Billing Day': e.billing_day_of_month,
@@ -336,14 +336,14 @@ export default function SchemesPage() {
   }
 
   function getMonthlyAmount(e: Enrollment): number {
-    // commitment overrides plan monthly_amount
+    // commitment overrides plan installment_amount
     const commitment = safeNumber(e.commitment_amount);
     if (commitment > 0) return commitment;
-    return safeNumber(e.plans?.monthly_amount);
+    return safeNumber(e.scheme_templates?.installment_amount);
   }
 
   function getTenure(e: Enrollment): number {
-    return safeNumber(e.plans?.tenure_months);
+    return safeNumber(e.scheme_templates?.duration_months);
   }
 
   // IMPORTANT: enrollments table does not store totals; compute from txns when dialog opens.
@@ -422,11 +422,11 @@ export default function SchemesPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtered.map((enrollment) => {
           const c = enrollment.customers;
-          const p = enrollment.plans;
+          const p = enrollment.scheme_templates;
 
           const monthly = getMonthlyAmount(enrollment);
           const tenure = getTenure(enrollment);
-          const planName = p?.plan_name || 'Plan';
+          const planName = p?.name || 'Plan';
           const karat = p?.karat || '';
 
           return (
