@@ -83,11 +83,13 @@ CREATE POLICY "Admins can delete enrollments"
   );
 
 -- Add enrollment_id column to transactions if it doesn't exist
-ALTER TABLE transactions ADD COLUMN IF NOT EXISTS enrollment_id uuid REFERENCES enrollments(id) ON DELETE SET NULL;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS enrollment_id uuid;
 CREATE INDEX IF NOT EXISTS idx_transactions_enrollment ON transactions(enrollment_id);
 
--- Create enrollment_billing_months table if it doesn't exist
-CREATE TABLE IF NOT EXISTS enrollment_billing_months (
+-- Drop and recreate enrollment_billing_months table with correct structure
+DROP TABLE IF EXISTS enrollment_billing_months CASCADE;
+
+CREATE TABLE enrollment_billing_months (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   retailer_id uuid NOT NULL REFERENCES retailers(id) ON DELETE CASCADE,
   enrollment_id uuid NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,
