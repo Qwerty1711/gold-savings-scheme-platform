@@ -373,16 +373,8 @@ export default function EnrollmentWizard() {
         customerId = existingId;
         finalCustomerName = customerName;
       }
-              .single();
 
-            if (customerError) throw customerError;
-            existingId = newCustomer.id;
-          }
-        }
-
-        customerId = existingId;
-        finalCustomerName = customerName;
-      }
+      // 2) Create enrollment (NOT schemes)
 
       // 2) Create enrollment (NOT schemes)
       const startDate = new Date();
@@ -433,6 +425,7 @@ export default function EnrollmentWizard() {
       const dueDate = computeFirstDueDate(startDate, billingDay);
 
       const { error: billErr } = await supabase.from('enrollment_billing_months').insert({
+        retailer_id: profile.retailer_id,
         enrollment_id: enrollment.id,
         billing_month: billingMonth,
         due_date: dueDate,

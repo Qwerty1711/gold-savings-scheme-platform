@@ -89,6 +89,7 @@ CREATE INDEX IF NOT EXISTS idx_transactions_enrollment ON transactions(enrollmen
 -- Create enrollment_billing_months table if it doesn't exist
 CREATE TABLE IF NOT EXISTS enrollment_billing_months (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  retailer_id uuid NOT NULL REFERENCES retailers(id) ON DELETE CASCADE,
   enrollment_id uuid NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,
   billing_month date NOT NULL,
   due_date date NOT NULL,
