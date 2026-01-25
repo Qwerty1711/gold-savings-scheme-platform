@@ -622,32 +622,9 @@ export default function PulseDashboard() {
                 )}
               </div>
             </div>
-                  <p className="text-sm text-muted-foreground">Not set</p>
-                )}
-              </div>
-
-              {/* 22K Gold */}
-              <div className="p-5 rounded-2xl bg-gradient-to-br from-gold-50 to-gold-100/50 dark:from-gold-900/20 dark:to-gold-800/10 border-2 border-gold-300/50 dark:border-gold-700/30 ring-2 ring-gold-400/30">
-                <div className="flex items-center justify-between mb-2">
-                  <Badge className="bg-gold-200 dark:bg-gold-900/50 border-gold-400 dark:border-gold-600 text-gold-800 dark:text-gold-200">22K • Standard</Badge>
-                </div>
-                {metrics?.currentRates.k22 ? (
-                  <>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-3xl font-bold gold-text">₹{metrics.currentRates.k22.rate.toLocaleString()}</span>
-                      <span className="text-sm text-muted-foreground">/gram</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Updated: {new Date(metrics.currentRates.k22.validFrom).toLocaleTimeString('en-IN')}
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Not set</p>
-                )}
-              </div>
-
-              {/* 24K Gold */}
-              <div className="p-5 rounded-2xl bg-gradient-to-br from-yellow-50 to-yellow-100/50 dark:from-yellow-900/20 dark:to-yellow-800/10 border-2 border-yellow-200/50 dark:border-yellow-700/30">
+          </div>
+        </CardContent>
+      </Card>
                 <div className="flex items-center justify-between mb-2">
                   <Badge variant="outline" className="bg-yellow-100 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700">24K • Pure</Badge>
                 </div>
