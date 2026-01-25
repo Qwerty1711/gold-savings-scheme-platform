@@ -334,7 +334,9 @@ export default function PulseDashboard() {
       let gold18KAllocated = 0, gold22KAllocated = 0, gold24KAllocated = 0, silverAllocated = 0;
       
       (txnsResult.data || []).forEach((t: any) => {
-        const karat = t.enrollments?.karat;
+        // Handle both array and object responses from Supabase join
+        const enrollment = Array.isArray(t.enrollments) ? t.enrollments[0] : t.enrollments;
+        const karat = enrollment?.karat;
         const amt = safeNumber(t.amount_paid);
         const grams = safeNumber(t.grams_allocated_snapshot);
         
@@ -360,7 +362,9 @@ export default function PulseDashboard() {
       let dues18K = 0, dues22K = 0, dues24K = 0, duesSilver = 0;
       
       (duesResult.data || []).forEach((d: any) => {
-        const karat = d.enrollments?.karat;
+        // Handle both array and object responses from Supabase join
+        const enrollment = Array.isArray(d.enrollments) ? d.enrollments[0] : d.enrollments;
+        const karat = enrollment?.karat;
         const amt = safeNumber(d.monthly_amount);
         
         if (karat === '18K') {
