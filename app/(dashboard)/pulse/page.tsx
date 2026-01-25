@@ -25,11 +25,23 @@ import { useAuth } from '@/lib/contexts/auth-context';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 type DashboardMetrics = {
-  todayCollections: number;
-  goldAllocatedToday: number;
-  dueToday: number;
+  periodCollections: number;
+  collections18K: number;
+  collections22K: number;
+  collections24K: number;
+  collectionsSilver: number;
+  goldAllocatedPeriod: number;
+  gold18KAllocated: number;
+  gold22KAllocated: number;
+  gold24KAllocated: number;
+  silverAllocated: number;
+  duesOutstanding: number;
+  dues18K: number;
+  dues22K: number;
+  dues24K: number;
+  duesSilver: number;
   overdueCount: number;
-  newEnrollmentsToday: number;
+  newEnrollmentsPeriod: number;
   activeCustomers: number;
   planAmountTotal: number;
   totalActiveEnrollmentsAllTime: number;
@@ -188,7 +200,7 @@ export default function PulseDashboard() {
         rate24Result,
         rateSilverResult,
         txnsResult,
-        dueTodayResult,
+        duesResult,
         overdueResult,
         enrollmentsResult,
         customersCount,
@@ -236,22 +248,22 @@ export default function PulseDashboard() {
           .limit(1)
           .maybeSingle(),
 
-        // Today's paid transactions (UTC range)
+        // Period paid transactions with karat info from enrollments
         supabase
           .from('transactions')
-          .select('amount_paid, grams_allocated_snapshot, paid_at')
+          .select('amount_paid, grams_allocated_snapshot, paid_at, scheme_id, enrollments!inner(karat)')
           .eq('retailer_id', retailerId)
           .eq('payment_status', 'SUCCESS')
           .gte('paid_at', startISO)
           .lt('paid_at', endISO),
 
-        // Due today: billing rows where due_date is today AND not paid
-        // IMPORTANT: Use primary_paid as the reliable indicator (status may be inconsistent/optional)
+        // Dues outstanding in period: billing rows where due_date is in range AND not paid
         supabase
           .from('enrollment_billing_months')
-          .select('enrollment_id', { count: 'exact', head: true })
+          .select('enrollment_id, monthly_amount, enrollments!inner(karat)')
           .eq('retailer_id', retailerId)
-          .eq('due_date', todayDateISO)
+          .gte('due_date', startISO.split('T')[0])
+          .lte('due_date', endISO.split('T')[0])
           .eq('primary_paid', false),
 
         // Overdue: due_date before today AND not paid
@@ -317,11 +329,53 @@ export default function PulseDashboard() {
           : null,
       };
 
-      const todayCollections =
-        txnsResult.data?.reduce((sum: number, t: any) => sum + safeNumber(t.amount_paid), 0) || 0;
+      // Calculate collections and grams allocated broken down by metal type
+      let collections18K = 0, collections22K = 0, collections24K = 0, collectionsSilver = 0;
+      let gold18KAllocated = 0, gold22KAllocated = 0, gold24KAllocated = 0, silverAllocated = 0;
+      
+      (txnsResult.data || []).forEach((t: any) => {
+        const karat = t.enrollments?.karat;
+        const amt = safeNumber(t.amount_paid);
+        const grams = safeNumber(t.grams_allocated_snapshot);
+        
+        if (karat === '18K') {
+          collections18K += amt;
+          gold18KAllocated += grams;
+        } else if (karat === '22K') {
+          collections22K += amt;
+          gold22KAllocated += grams;
+        } else if (karat === '24K') {
+          collections24K += amt;
+          gold24KAllocated += grams;
+        } else if (karat === 'SILVER') {
+          collectionsSilver += amt;
+          silverAllocated += grams;
+        }
+      });
 
-      const goldAllocatedToday =
-        txnsResult.data?.reduce((sum: number, t: any) => sum + safeNumber(t.grams_allocated_snapshot), 0) || 0;
+      const periodCollections = collections18K + collections22K + collections24K + collectionsSilver;
+      const goldAllocatedPeriod = gold18KAllocated + gold22KAllocated + gold24KAllocated;
+
+      // Calculate dues outstanding broken down by metal type
+      let dues18K = 0, dues22K = 0, dues24K = 0, duesSilver = 0;
+      
+      (duesResult.data || []).forEach((d: any) => {
+        const karat = d.enrollments?.karat;
+        const amt = safeNumber(d.monthly_amount);
+        
+        if (karat === '18K') {
+          dues18K += amt;
+        } else if (karat === '22K') {
+          dues22K += amt;
+        } else if (karat === '24K') {
+          dues24K += amt;
+        } else if (karat === 'SILVER') {
+          duesSilver += amt;
+        }
+      });
+
+      const duesOutstanding = dues18K + dues22K + dues24K + duesSilver;
+
 
       // Compute plan total = sum(installment_amount * duration_months) for each active enrollment
       const schemesMap = new Map<string, { installment_amount: number; duration_months: number }>();
@@ -338,11 +392,23 @@ export default function PulseDashboard() {
       }, 0);
 
       setMetrics({
-        todayCollections,
-        goldAllocatedToday,
-        dueToday: dueTodayResult.count || 0,
+        periodCollections,
+        collections18K,
+        collections22K,
+        collections24K,
+        collectionsSilver,
+        goldAllocatedPeriod,
+        gold18KAllocated,
+        gold22KAllocated,
+        gold24KAllocated,
+        silverAllocated,
+        duesOutstanding,
+        dues18K,
+        dues22K,
+        dues24K,
+        duesSilver,
         overdueCount: overdueResult.count || 0,
-        newEnrollmentsToday: enrollmentsResult.count || 0,
+        newEnrollmentsPeriod: enrollmentsResult.count || 0,
         activeCustomers: customersCount || 0,
         planAmountTotal,
         totalActiveEnrollmentsAllTime: (activeEnrollmentsAll.data || []).length,
@@ -635,11 +701,29 @@ export default function PulseDashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">₹{(metrics?.todayCollections ?? 0).toLocaleString()}</div>
+            <div className="text-3xl font-bold">₹{(metrics?.periodCollections ?? 0).toLocaleString()}</div>
             <p className="text-xs text-muted-foreground mt-1">{periodLabel}</p>
-            <div className="flex items-center gap-1 mt-2">
+            <div className="flex items-center gap-1 mt-2 mb-3">
               <TrendingUp className="w-3 h-3 text-green-600" />
               <span className="text-xs text-green-600">Live</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+              <div className="text-xs">
+                <Badge variant="outline" className="bg-amber-50 dark:bg-amber-900/20 border-amber-300 mb-1 text-[10px]">18K</Badge>
+                <div className="font-semibold">₹{(metrics?.collections18K ?? 0).toLocaleString()}</div>
+              </div>
+              <div className="text-xs">
+                <Badge className="bg-gold-100 dark:bg-gold-900/30 text-gold-800 dark:text-gold-200 border-gold-400 mb-1 text-[10px]">22K</Badge>
+                <div className="font-semibold">₹{(metrics?.collections22K ?? 0).toLocaleString()}</div>
+              </div>
+              <div className="text-xs">
+                <Badge variant="outline" className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 mb-1 text-[10px]">24K</Badge>
+                <div className="font-semibold">₹{(metrics?.collections24K ?? 0).toLocaleString()}</div>
+              </div>
+              <div className="text-xs">
+                <Badge variant="outline" className="bg-slate-50 dark:bg-slate-900/20 border-slate-300 mb-1 text-[10px]">Silver</Badge>
+                <div className="font-semibold">₹{(metrics?.collectionsSilver ?? 0).toLocaleString()}</div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -652,34 +736,69 @@ export default function PulseDashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold gold-text">{(metrics?.goldAllocatedToday ?? 0).toFixed(4)} g</div>
+            <div className="text-3xl font-bold gold-text">{(metrics?.goldAllocatedPeriod ?? 0).toFixed(4)} g</div>
             <p className="text-xs text-muted-foreground mt-1">{periodLabel}</p>
+            <div className="grid grid-cols-3 gap-2 pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
+              <div className="text-xs">
+                <Badge variant="outline" className="bg-amber-50 dark:bg-amber-900/20 border-amber-300 mb-1 text-[10px]">18K</Badge>
+                <div className="font-semibold">{(metrics?.gold18KAllocated ?? 0).toFixed(3)} g</div>
+              </div>
+              <div className="text-xs">
+                <Badge className="bg-gold-100 dark:bg-gold-900/30 text-gold-800 dark:text-gold-200 border-gold-400 mb-1 text-[10px]">22K</Badge>
+                <div className="font-semibold">{(metrics?.gold22KAllocated ?? 0).toFixed(3)} g</div>
+              </div>
+              <div className="text-xs">
+                <Badge variant="outline" className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 mb-1 text-[10px]">24K</Badge>
+                <div className="font-semibold">{(metrics?.gold24KAllocated ?? 0).toFixed(3)} g</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="jewel-card hover:scale-105 transition-transform">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium">Silver Allocated</CardTitle>
+              <TrendingUp className="w-5 h-5 text-slate-600" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-slate-600 dark:text-slate-400">{(metrics?.silverAllocated ?? 0).toFixed(4)} g</div>
+            <p className="text-xs text-muted-foreground mt-1">{periodLabel}</p>
+            <div className="flex items-center gap-1 mt-2">
+              <Badge variant="outline" className="bg-slate-50 dark:bg-slate-900/20 border-slate-300 text-[10px]">SILVER</Badge>
+            </div>
           </CardContent>
         </Card>
 
         <Card className="jewel-card hover:scale-105 transition-transform cursor-pointer" onClick={() => router.push('/dashboard/due')}>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium">Due Today</CardTitle>
+              <CardTitle className="text-sm font-medium">Dues Outstanding</CardTitle>
               <Clock className="w-5 h-5 text-orange-600" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{metrics?.dueToday || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">Payments</p>
-          </CardContent>
-        </Card>
-
-        <Card className="jewel-card hover:scale-105 transition-transform cursor-pointer" onClick={() => router.push('/dashboard/due')}>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium">Overdue</CardTitle>
-              <AlertCircle className="w-5 h-5 text-red-600" />
+            <div className="text-3xl font-bold">₹{(metrics?.duesOutstanding ?? 0).toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground mt-1">{periodLabel}</p>
+            <div className="grid grid-cols-2 gap-2 pt-3 mt-2 border-t border-gray-200 dark:border-gray-700">
+              <div className="text-xs">
+                <Badge variant="outline" className="bg-amber-50 dark:bg-amber-900/20 border-amber-300 mb-1 text-[10px]">18K</Badge>
+                <div className="font-semibold">₹{(metrics?.dues18K ?? 0).toLocaleString()}</div>
+              </div>
+              <div className="text-xs">
+                <Badge className="bg-gold-100 dark:bg-gold-900/30 text-gold-800 dark:text-gold-200 border-gold-400 mb-1 text-[10px]">22K</Badge>
+                <div className="font-semibold">₹{(metrics?.dues22K ?? 0).toLocaleString()}</div>
+              </div>
+              <div className="text-xs">
+                <Badge variant="outline" className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 mb-1 text-[10px]">24K</Badge>
+                <div className="font-semibold">₹{(metrics?.dues24K ?? 0).toLocaleString()}</div>
+              </div>
+              <div className="text-xs">
+                <Badge variant="outline" className="bg-slate-50 dark:bg-slate-900/20 border-slate-300 mb-1 text-[10px]">Silver</Badge>
+                <div className="font-semibold">₹{(metrics?.duesSilver ?? 0).toLocaleString()}</div>
+              </div>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-red-600">{metrics?.overdueCount || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">Billing months</p>
           </CardContent>
         </Card>
       </div>
@@ -701,8 +820,8 @@ export default function PulseDashboard() {
               <p className="text-2xl font-bold text-blue-600">{metrics?.totalActiveEnrollmentsAllTime ?? 0}</p>
             </div>
             <div className="p-4 rounded-2xl bg-gradient-to-br from-orange-100 to-orange-50 dark:from-orange-900/30 dark:to-orange-800/20">
-              <p className="text-xs text-muted-foreground mb-1">Dues Outstanding</p>
-              <p className="text-2xl font-bold text-orange-600">{(metrics?.dueToday ?? 0) + (metrics?.overdueCount ?? 0)}</p>
+              <p className="text-xs text-muted-foreground mb-1">Total Dues & Overdue</p>
+              <p className="text-2xl font-bold text-orange-600">{(metrics?.duesOutstanding ?? 0) + (metrics?.overdueCount ?? 0)}</p>
             </div>
           </div>
         </CardContent>
@@ -712,7 +831,7 @@ export default function PulseDashboard() {
         <Card className="jewel-card">
           <CardHeader>
             <CardTitle>New Enrollments</CardTitle>
-            <CardDescription>Today&apos;s customer acquisitions</CardDescription>
+            <CardDescription>{periodLabel} customer acquisitions</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-4">
@@ -720,7 +839,7 @@ export default function PulseDashboard() {
                 <Users className="w-10 h-10 text-blue-600" />
               </div>
               <div>
-                <div className="text-4xl font-bold">{metrics?.newEnrollmentsToday || 0}</div>
+                <div className="text-4xl font-bold">{metrics?.newEnrollmentsPeriod || 0}</div>
                 <p className="text-sm text-muted-foreground">
                   New enrollments • Active customers: {metrics?.activeCustomers || 0}
                 </p>
