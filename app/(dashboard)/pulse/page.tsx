@@ -625,27 +625,6 @@ export default function PulseDashboard() {
           </div>
         </CardContent>
       </Card>
-                <div className="flex items-center justify-between mb-2">
-                  <Badge variant="outline" className="bg-yellow-100 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700">24K • Pure</Badge>
-                </div>
-                {metrics?.currentRates.k24 ? (
-                  <>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-3xl font-bold text-yellow-600 dark:text-yellow-400">₹{metrics.currentRates.k24.rate.toLocaleString()}</span>
-                      <span className="text-sm text-muted-foreground">/gram</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Updated: {new Date(metrics.currentRates.k24.validFrom).toLocaleTimeString('en-IN')}
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Not set</p>
-                )}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="jewel-card hover:scale-105 transition-transform cursor-pointer" onClick={() => router.push('/collections')}>
