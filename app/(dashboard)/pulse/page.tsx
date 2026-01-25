@@ -251,7 +251,7 @@ export default function PulseDashboard() {
         // Period paid transactions with karat info from enrollments
         supabase
           .from('transactions')
-          .select('amount_paid, grams_allocated_snapshot, paid_at, scheme_id, enrollments!inner(karat)')
+          .select('amount_paid, grams_allocated_snapshot, paid_at, enrollment_id, enrollments(karat)')
           .eq('retailer_id', retailerId)
           .eq('payment_status', 'SUCCESS')
           .gte('paid_at', startISO)
@@ -260,10 +260,10 @@ export default function PulseDashboard() {
         // Dues outstanding in period: billing rows where due_date is in range AND not paid
         supabase
           .from('enrollment_billing_months')
-          .select('enrollment_id, monthly_amount, enrollments!inner(karat)')
+          .select('enrollment_id, monthly_amount, enrollments(karat)')
           .eq('retailer_id', retailerId)
           .gte('due_date', startISO.split('T')[0])
-          .lte('due_date', endISO.split('T')[0])
+          .lt('due_date', endISO.split('T')[0])
           .eq('primary_paid', false),
 
         // Overdue: due_date before today AND not paid
