@@ -371,13 +371,22 @@ export default function CollectionsPage() {
       return;
     }
 
-    // Validate against monthly commitment if not yet met
-    if (monthlyPaymentInfo && !monthlyPaymentInfo.is_met) {
-      if (amountNum < monthlyPaymentInfo.remaining) {
-        toast.error(
-          `Minimum payment required: ₹${monthlyPaymentInfo.remaining.toLocaleString()} to meet monthly commitment of ₹${monthlyPaymentInfo.commitment_amount.toLocaleString()}`
-        );
-        return;
+    // Determine transaction type based on monthly commitment status
+    let txnType: 'PRIMARY_INSTALLMENT' | 'TOP_UP' = 'PRIMARY_INSTALLMENT';
+    
+    if (monthlyPaymentInfo) {
+      if (monthlyPaymentInfo.is_met) {
+        // Monthly commitment already met - this is a TOP_UP
+        txnType = 'TOP_UP';
+      } else {
+        // Monthly commitment not met - validate minimum payment
+        if (amountNum < monthlyPaymentInfo.remaining) {
+          toast.error(
+            `Minimum payment required: ₹${monthlyPaymentInfo.remaining.toLocaleString()} to meet monthly commitment of ₹${monthlyPaymentInfo.commitment_amount.toLocaleString()}`
+          );
+          return;
+        }
+        txnType = 'PRIMARY_INSTALLMENT';
       }
     }
 
@@ -394,7 +403,7 @@ export default function CollectionsPage() {
         rate_per_gram_snapshot: goldRate.rate_per_gram,
         gold_rate_id: goldRate.id,
         grams_allocated_snapshot: gramsAllocated,
-        txn_type: 'PRIMARY_INSTALLMENT',
+        txn_type: txnType,
         mode,
         payment_status: 'SUCCESS',
         paid_at: now,

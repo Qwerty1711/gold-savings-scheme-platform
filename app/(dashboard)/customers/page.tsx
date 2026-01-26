@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Users, Search, TrendingUp, Award } from 'lucide-react';
+import { Users, Search, TrendingUp, Award, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 type CustomerEnrollment = {
@@ -23,6 +23,7 @@ type CustomerEnrollment = {
     karat: string;
     status: string;
     total_paid: number;
+    total_grams: number;
     months_paid: number;
     months_remaining: number;
     duration_months: number;
@@ -39,7 +40,7 @@ export default function CustomersPage() {
   const { profile } = useAuth();
   const [customers, setCustomers] = useState<CustomerEnrollment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ACTIVE');
+  const [filterStatus, setFilterStatus] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
@@ -209,7 +210,8 @@ export default function CustomersPage() {
             silver += enrollmentTotalGrams;
           }
 
-          if (enrollment.status === 'ACTIVE') {
+          // Count as active if status is ACTIVE or if status is null/undefined (default to active)
+          if (!enrollment.status || enrollment.status === 'ACTIVE') {
             activeCount++;
           }
 
@@ -222,6 +224,7 @@ export default function CustomersPage() {
             karat: enrollment.karat || '22K',
             status: enrollment.status,
             total_paid: enrollmentTotalPaid,
+            total_grams: enrollmentTotalGrams,
             months_paid: monthsPaid,
             months_remaining: monthsRemaining,
             duration_months: durationMonths,
@@ -270,6 +273,14 @@ export default function CustomersPage() {
           </h1>
           <p className="text-muted-foreground">Manage customer enrollments and track progress</p>
         </div>
+        <Button 
+          onClick={() => loadCustomers()} 
+          variant="outline"
+          className="gap-2"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Refresh Data
+        </Button>
       </div>
 
       {/* Stats Cards */}
@@ -361,7 +372,7 @@ export default function CustomersPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Customer</TableHead>
-                    <TableHead>Plans Enrolled</TableHead>
+                    <TableHead>Plan Enrolled</TableHead>
                     <TableHead className="text-right">Total Paid</TableHead>
                     <TableHead className="text-center">18K Gold</TableHead>
                     <TableHead className="text-center">22K Gold</TableHead>
@@ -369,91 +380,104 @@ export default function CustomersPage() {
                     <TableHead className="text-center">Silver</TableHead>
                     <TableHead className="text-center">Months Paid</TableHead>
                     <TableHead className="text-center">Months Due</TableHead>
-                    <TableHead className="text-center">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredCustomers.map((customer) => {
-                    const totalMonthsPaid = customer.enrollments.reduce((sum, e) => sum + e.months_paid, 0);
-                    const totalMonthsDue = customer.enrollments.reduce((sum, e) => sum + e.months_remaining, 0);
+                    // If customer has no enrollments, show one row
+                    if (customer.enrollments.length === 0) {
+                      return (
+                        <TableRow key={customer.customer_id}>
+                          <TableCell>
+                            <div>
+                              <div className="font-medium">{customer.customer_name}</div>
+                              <div className="text-sm text-muted-foreground">{customer.customer_phone}</div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm text-muted-foreground">No enrollments</span>
+                          </TableCell>
+                          <TableCell className="text-right">₹0</TableCell>
+                          <TableCell className="text-center"><span className="text-muted-foreground">-</span></TableCell>
+                          <TableCell className="text-center"><span className="text-muted-foreground">-</span></TableCell>
+                          <TableCell className="text-center"><span className="text-muted-foreground">-</span></TableCell>
+                          <TableCell className="text-center"><span className="text-muted-foreground">-</span></TableCell>
+                          <TableCell className="text-center">0</TableCell>
+                          <TableCell className="text-center">0</TableCell>
+                        </TableRow>
+                      );
+                    }
 
-                    return (
-                      <TableRow key={customer.customer_id}>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">{customer.customer_name}</div>
-                            <div className="text-sm text-muted-foreground">{customer.customer_phone}</div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1">
-                            {customer.enrollments.map((e, idx) => (
-                              <div key={idx} className="text-sm">
-                                <span className="font-medium">{e.plan_name}</span>
-                                <Badge variant="outline" className="ml-2 text-xs">
-                                  {e.karat}
-                                </Badge>
+                    // Show separate row for each enrollment
+                    return customer.enrollments.map((enrollment, idx) => {
+                      // Determine which karat column to show grams in
+                      const isGold18k = enrollment.karat === '18K';
+                      const isGold22k = enrollment.karat === '22K';
+                      const isGold24k = enrollment.karat === '24K';
+                      const isSilver = enrollment.karat === 'SILVER';
+
+                      return (
+                        <TableRow key={`${customer.customer_id}-${enrollment.id}`}>
+                          <TableCell rowSpan={idx === 0 ? customer.enrollments.length : undefined} className={idx === 0 ? "border-r" : "hidden"}>
+                            {idx === 0 && (
+                              <div>
+                                <div className="font-medium">{customer.customer_name}</div>
+                                <div className="text-sm text-muted-foreground">{customer.customer_phone}</div>
                               </div>
-                            ))}
-                            {customer.enrollments.length === 0 && (
-                              <span className="text-sm text-muted-foreground">No enrollments</span>
                             )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          ₹{customer.total_amount_paid.toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {customer.gold_18k_accumulated > 0 ? (
-                            <span className="font-medium">{customer.gold_18k_accumulated.toFixed(3)}g</span>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {customer.gold_22k_accumulated > 0 ? (
-                            <span className="font-medium gold-text">{customer.gold_22k_accumulated.toFixed(3)}g</span>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {customer.gold_24k_accumulated > 0 ? (
-                            <span className="font-medium">{customer.gold_24k_accumulated.toFixed(3)}g</span>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {customer.silver_accumulated > 0 ? (
-                            <span className="font-medium text-slate-600">{customer.silver_accumulated.toFixed(3)}g</span>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant="outline" className="bg-green-50 border-green-300">
-                            {totalMonthsPaid}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant="outline" className="bg-orange-50 border-orange-300">
-                            {totalMonthsDue}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {customer.active_enrollments > 0 ? (
-                            <Badge className="bg-green-100 text-green-800 border-green-300">
-                              Active ({customer.active_enrollments})
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm">
+                              <span className="font-medium">{enrollment.plan_name}</span>
+                              <Badge variant="outline" className="ml-2 text-xs">
+                                {enrollment.karat}
+                              </Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            ₹{enrollment.total_paid.toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {isGold18k && enrollment.total_grams > 0 ? (
+                              <span className="font-medium">{enrollment.total_grams.toFixed(3)}g</span>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {isGold22k && enrollment.total_grams > 0 ? (
+                              <span className="font-medium gold-text">{enrollment.total_grams.toFixed(3)}g</span>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {isGold24k && enrollment.total_grams > 0 ? (
+                              <span className="font-medium">{enrollment.total_grams.toFixed(3)}g</span>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {isSilver && enrollment.total_grams > 0 ? (
+                              <span className="font-medium text-slate-600">{enrollment.total_grams.toFixed(3)}g</span>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline" className="bg-green-50 border-green-300">
+                              {enrollment.months_paid}
                             </Badge>
-                          ) : (
-                            <Badge variant="outline" className="bg-gray-100 text-gray-600">
-                              Inactive
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline" className="bg-orange-50 border-orange-300">
+                              {enrollment.months_remaining}
                             </Badge>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
+                          </TableCell>
+                        </TableRow>
+                      );
+                    });
                   })}
                 </TableBody>
               </Table>
