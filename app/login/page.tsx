@@ -10,7 +10,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { AnimatedLogo } from '@/components/ui/animated-logo';
-import { Footer } from '@/components/ui/footer';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -154,7 +153,7 @@ export default function LoginPage() {
         </Card>
 
         <div className="text-center text-sm text-muted-foreground">
-          <Footer />
+          <p>© 2026 {retailerName}. All rights reserved.</p>
         </div>
       </div>
     </div>

@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from '@/lib/contexts/auth-context';
+import { BrandingProvider } from '@/lib/contexts/branding-context';
 import { TopBar } from '@/components/retailer/top-bar';
 import { IconDock } from '@/components/retailer/icon-dock';
 import { Toaster } from '@/components/ui/sonner';
@@ -56,7 +57,9 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
-      <DashboardContent>{children}</DashboardContent>
+      <BrandingProvider>
+        <DashboardContent>{children}</DashboardContent>
+      </BrandingProvider>
     </AuthProvider>
   );
 }

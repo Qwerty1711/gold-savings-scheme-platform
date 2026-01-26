@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/contexts/auth-context';
+import { useBranding } from '@/lib/contexts/branding-context';
+import { AnimatedLogo } from '@/components/ui/animated-logo';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -28,17 +30,16 @@ const navItems = [
 export function TopNav() {
   const pathname = usePathname();
   const { profile, signOut } = useAuth();
+  const { branding } = useBranding();
   const [open, setOpen] = useState(false);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center">
         <Link href="/dashboard" className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl jewel-gradient flex items-center justify-center">
-            <Gem className="w-6 h-6 text-white" />
-          </div>
+          <AnimatedLogo logoUrl={branding.logoUrl} size="md" showAnimation={false} />
           <div className="hidden sm:block">
-            <h1 className="text-lg font-bold gold-text">GoldSaver</h1>
+            <h1 className="text-lg font-bold gold-text">{branding.name}</h1>
             <p className="text-[10px] text-muted-foreground -mt-1">Premium Gold Schemes</p>
           </div>
         </Link>
@@ -106,11 +107,9 @@ export function TopNav() {
             </SheetTrigger>
             <SheetContent side="right" className="w-72">
               <div className="flex items-center gap-3 mb-8">
-                <div className="w-10 h-10 rounded-xl jewel-gradient flex items-center justify-center">
-                  <Gem className="w-6 h-6 text-white" />
-                </div>
+                <AnimatedLogo logoUrl={branding.logoUrl} size="md" showAnimation={false} />
                 <div>
-                  <h1 className="text-lg font-bold gold-text">GoldSaver</h1>
+                  <h1 className="text-lg font-bold gold-text">{branding.name}</h1>
                   <p className="text-xs text-muted-foreground">Premium Schemes</p>
                 </div>
               </div>
