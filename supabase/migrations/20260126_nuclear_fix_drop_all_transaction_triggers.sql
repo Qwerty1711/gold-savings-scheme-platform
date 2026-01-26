@@ -53,10 +53,26 @@ DROP FUNCTION IF EXISTS set_gold_rate() CASCADE;
 -- 3. RECREATE ONLY REQUIRED TRIGGERS (CLEAN)
 -- =====================================================
 
--- Function: Auto-set billing_month and recorded_at
+-- Function: Generate unique receipt number
+CREATE OR REPLACE FUNCTION generate_receipt_number()
+RETURNS TEXT AS $$
+DECLARE
+  v_receipt_number TEXT;
+BEGIN
+  v_receipt_number := 'RCP' || TO_CHAR(NOW(), 'YYYYMMDD') || LPAD(FLOOR(RANDOM() * 10000)::TEXT, 4, '0');
+  RETURN v_receipt_number;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function: Auto-set billing_month, recorded_at, and receipt_number
 CREATE OR REPLACE FUNCTION set_billing_month()
 RETURNS TRIGGER AS $$
 BEGIN
+  -- Generate receipt number if not provided
+  IF NEW.receipt_number IS NULL THEN
+    NEW.receipt_number := generate_receipt_number();
+  END IF;
+  
   -- Set recorded_at for offline payments if not provided
   IF NEW.source = 'STAFF_OFFLINE'::transaction_source AND NEW.recorded_at IS NULL THEN
     NEW.recorded_at := NOW();
@@ -140,11 +156,13 @@ END $$;
 -- 5. COMMENTS
 -- =====================================================
 
+COMMENT ON FUNCTION generate_receipt_number IS 
+  'Generates unique receipt number in format RCP{YYYYMMDD}{4-digit random}';
 COMMENT ON TRIGGER set_billing_month_trigger ON transactions IS 
-  'Auto-calculates billing_month and recorded_at for new transactions';
+  'Auto-generates receipt_number, billing_month, and recorded_at for new transactions';
 COMMENT ON TRIGGER validate_transaction_amount_trigger ON transactions IS 
   'Validates transaction amount against enrollment commitment_amount';
 COMMENT ON FUNCTION set_billing_month IS 
-  'Sets billing_month to first-of-month and recorded_at for offline payments';
+  'Auto-sets receipt_number, billing_month to first-of-month, and recorded_at for offline payments';
 COMMENT ON FUNCTION validate_transaction_amount IS 
   'Ensures PRIMARY_INSTALLMENT >= commitment_amount and TOP_UP > 0';
