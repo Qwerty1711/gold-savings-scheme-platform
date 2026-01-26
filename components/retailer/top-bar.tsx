@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Search, Plus, Bell, User } from 'lucide-react';
+import { Search, Plus, Bell, User, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -86,6 +86,15 @@ export function TopBar() {
             </Badge>
           </Button>
 
+          <Button 
+            variant="outline" 
+            size="icon" 
+            className="rounded-2xl border-gold-300/50 hover:bg-gold-50 dark:hover:bg-gold-900/30"
+            onClick={() => router.push('/settings')}
+          >
+            <Settings className="w-5 h-5 text-gold-600" />
+          </Button>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button 
@@ -104,9 +113,6 @@ export function TopBar() {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => router.push('/settings')}>
-                Settings
-              </DropdownMenuItem>
               <DropdownMenuItem onClick={handleSignOut}>
                 Sign Out
               </DropdownMenuItem>
