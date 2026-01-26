@@ -1691,12 +1691,8 @@ export default function PulseDashboard() {
                       <TableHead className="text-right">Monthly Amount</TableHead>
                       <TableHead>Paid Date</TableHead>
                       <TableHead>Mode of Payment</TableHead>
-                      <TableHead>Payment Gateway</TableHead>
-                      <TableHead>Payment Month</TableHead>
                       <TableHead className="text-right">Gold Accumulated</TableHead>
                       <TableHead className="text-right">Gold Rate During Purchase</TableHead>
-                      <TableHead>Order Id</TableHead>
-                      <TableHead className="text-center">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1731,26 +1727,9 @@ export default function PulseDashboard() {
                                   day: 'numeric',
                                 })}
                               </div>
-                              <div className="text-xs text-muted-foreground">
-                                {new Date(txn.paid_at).toLocaleTimeString('en-IN', {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}
-                              </div>
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline">{txn.mode || 'N/A'}</Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="secondary">{txn.source || 'STAFF_OFFLINE'}</Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge 
-                                variant={txn.txn_type === 'PRIMARY_INSTALLMENT' ? 'default' : 'outline'}
-                                className={txn.txn_type === 'PRIMARY_INSTALLMENT' ? 'bg-green-100 text-green-800 border-green-300' : ''}
-                              >
-                                {txn.txn_type === 'PRIMARY_INSTALLMENT' ? 'Monthly' : 'Top-up'}
-                              </Badge>
+                              <Badge variant="outline">{txn.mode || 'CASH'}</Badge>
                             </TableCell>
                             <TableCell className="text-right">
                               <span className="font-semibold gold-text">
@@ -1765,16 +1744,6 @@ export default function PulseDashboard() {
                                 ₹{(txn.rate_per_gram_snapshot || 0).toLocaleString()}
                               </span>
                               <div className="text-xs text-muted-foreground">/gram</div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="text-xs">
-                                {plan?.name || 'N/A'}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 gold-text hover:bg-gold-50">
-                                <ArrowRight className="w-4 h-4" />
-                              </Button>
                             </TableCell>
                           </TableRow>
                         );
