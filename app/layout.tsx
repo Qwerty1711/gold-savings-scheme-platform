@@ -6,7 +6,7 @@ import { Toaster } from '@/components/ui/toaster';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'GoldSaver - Premium Gold Savings Scheme Management',
+  title: 'Sync4AI - Premium Gold Savings Scheme Management',
   description: 'Premium SaaS platform for jewellery retailers to manage monthly gold savings schemes',
   openGraph: {
     images: [

@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from '@/lib/contexts/auth-context';
 import { BrandingProvider } from '@/lib/contexts/branding-context';
 import { TopBar } from '@/components/retailer/top-bar';
 import { IconDock } from '@/components/retailer/icon-dock';
+import { MobileNav } from '@/components/dashboard/mobile-nav';
 import { Toaster } from '@/components/ui/sonner';
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
@@ -45,9 +46,16 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       <IconDock />
 
       <div className="flex flex-col items-center py-6">
-        <main className="w-full max-w-7xl px-6 page-transition pb-32">
+        <main className="w-full max-w-7xl px-4 md:px-6 page-transition pb-32 md:pb-6">
           {children}
         </main>
+      </div>
+
+      {/* Mobile Navigation - Always visible on mobile */}
+      <MobileNav />
+
+      <Toaster />
+    </div>
       </div>
       <Toaster position="top-right" richColors />
     </div>

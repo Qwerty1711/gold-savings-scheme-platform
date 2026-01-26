@@ -338,6 +338,18 @@ export default function PulseDashboard() {
           .eq('retailer_id', retailerId),
       ]);
 
+      // Log any errors from the parallel queries
+      if (rate18Result.error) console.error('Gold rate 18K error:', rate18Result.error);
+      if (rate22Result.error) console.error('Gold rate 22K error:', rate22Result.error);
+      if (rate24Result.error) console.error('Gold rate 24K error:', rate24Result.error);
+      if (rateSilverResult.error) console.error('Silver rate error:', rateSilverResult.error);
+      if (txnsResult.error) console.error('Transactions error:', txnsResult.error);
+      if (duesResult.error) console.error('Dues error:', duesResult.error);
+      if (overdueResult.error) console.error('Overdue error:', overdueResult.error);
+      if (enrollmentsResult.error) console.error('Enrollments count error:', enrollmentsResult.error);
+      if (activeEnrollmentsAll.error) console.error('Active enrollments error:', activeEnrollmentsAll.error);
+      if (schemesAll.error) console.error('Schemes error:', schemesAll.error);
+
       const currentRates = {
         k18: rate18Result.data
           ? {
@@ -366,14 +378,18 @@ export default function PulseDashboard() {
       };
 
       // Fetch all enrollments to get karat information
-      const { data: enrollmentsData } = await supabase
+      const enrollmentsKaratResult = await supabase
         .from('enrollments')
         .select('id, karat')
         .eq('retailer_id', retailerId);
 
+      if (enrollmentsKaratResult.error) {
+        console.error('Error fetching enrollments karat data:', enrollmentsKaratResult.error);
+      }
+
       // Create a map of enrollment_id -> karat
       const enrollmentKaratMap = new Map<string, string>();
-      (enrollmentsData || []).forEach((e: any) => {
+      (enrollmentsKaratResult.data || []).forEach((e: any) => {
         enrollmentKaratMap.set(e.id, e.karat);
       });
 

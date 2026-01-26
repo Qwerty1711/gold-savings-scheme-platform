@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/contexts/auth-context';
+import { useBranding } from '@/lib/contexts/branding-context';
+import { AnimatedLogo } from '@/components/ui/animated-logo';
 import { Button } from '@/components/ui/button';
 
 const navItems = [
@@ -21,17 +23,16 @@ const navItems = [
 export function DesktopSidebar() {
   const pathname = usePathname();
   const { profile, signOut } = useAuth();
+  const { branding } = useBranding();
 
   return (
     <aside className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-64 bg-card border-r border-border">
       <div className="flex flex-col flex-1 overflow-y-auto">
         <div className="flex items-center gap-3 p-6 border-b border-border">
           <Link href="/pulse" className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center">
-              <Gem className="w-6 h-6 text-white" />
-            </div>
+            <AnimatedLogo logoUrl={branding.logoUrl} size="md" showAnimation={false} />
             <div>
-              <h1 className="text-lg font-bold gold-text">GoldSaver</h1>
+              <h1 className="text-lg font-bold gold-text">{branding.name}</h1>
               <p className="text-xs text-muted-foreground">Premium Schemes</p>
             </div>
           </Link>

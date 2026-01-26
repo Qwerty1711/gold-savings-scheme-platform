@@ -16,7 +16,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [retailerName] = useState('GoldSaver');
+  const [retailerName] = useState('Sync4AI');
   const [retailerLogo] = useState<string | null>(null);
   const router = useRouter();
 
@@ -114,7 +114,7 @@ export default function LoginPage() {
         </Card>
 
         <div className="text-center text-sm text-muted-foreground mt-4">
-          <p>© 2026 {retailerName}. All rights reserved.</p>
+          <p>© 2026 Sync4AI. All rights reserved.</p>
         </div>
       </div>
     </div>

@@ -20,9 +20,8 @@ export function IconDock() {
 
   return (
     <TooltipProvider delayDuration={0}>
-      <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 md:bottom-8 md:left-1/2">
-        <div className="luxury-card px-3 py-3 md:px-4 md:py-3 flex gap-1 md:gap-2 shadow-luxury-lg">
-          {navItems.map((item) => {
+      <nav className="hidden md:block fixed bottom-6 left-1/2 -translate-x-1/2 z-40 md:bottom-8 md:left-1/2">
+        <div className="luxury-card px-3 py-3 md:px-4 md:py-3 flex gap-1 md:gap-2 shadow-luxury-lg">{navItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
 
