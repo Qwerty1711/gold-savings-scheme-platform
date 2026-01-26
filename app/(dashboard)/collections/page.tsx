@@ -384,6 +384,7 @@ export default function CollectionsPage() {
     setSubmitting(true);
     try {
       const gramsAllocated = amountNum / goldRate.rate_per_gram;
+      const now = new Date().toISOString();
 
       const { error: txnError } = await supabase.from('transactions').insert({
         retailer_id: profile.retailer_id,
@@ -396,7 +397,8 @@ export default function CollectionsPage() {
         txn_type: 'PRIMARY_INSTALLMENT',
         mode,
         payment_status: 'SUCCESS',
-        paid_at: new Date().toISOString(),
+        paid_at: now,
+        recorded_at: now,
         source: 'STAFF_OFFLINE',
         store_id: selectedStore || null,
       });
