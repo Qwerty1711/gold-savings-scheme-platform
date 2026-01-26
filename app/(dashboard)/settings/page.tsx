@@ -333,26 +333,22 @@ export default function SettingsPage() {
         console.log('No old files to delete');
       }
 
-      // Read file as ArrayBuffer to ensure binary upload
-      const arrayBuffer = await file.arrayBuffer();
-      const blob = new Blob([arrayBuffer], { type: file.type });
-      
       // Create file path
       const fileExt = file.name.split('.').pop()?.toLowerCase() || 'png';
       const fileName = `logo.${fileExt}`;
       const filePath = `${profile.retailer_id}/${fileName}`;
 
-      console.log('Uploading:', { 
-        path: filePath, 
+      console.log('Direct upload - File info:', { 
+        name: file.name,
         type: file.type,
-        size: blob.size,
-        originalSize: file.size
+        size: file.size,
+        path: filePath
       });
 
-      // Upload the blob
+      // Upload file DIRECTLY without any conversion
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('retailer-logos')
-        .upload(filePath, blob, {
+        .upload(filePath, file, {
           cacheControl: '3600',
           upsert: true,
           contentType: file.type,
