@@ -345,13 +345,27 @@ export default function SettingsPage() {
         path: filePath
       });
 
-      // Upload file DIRECTLY without any conversion
+      // CRITICAL FIX: Map content type explicitly
+      const contentTypeMap: Record<string, string> = {
+        'png': 'image/png',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'gif': 'image/gif',
+        'webp': 'image/webp',
+        'svg': 'image/svg+xml',
+      };
+      
+      const detectedContentType = contentTypeMap[fileExt] || file.type || 'image/png';
+      
+      console.log('Using content type:', detectedContentType);
+
+      // Upload file with explicit content type
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('retailer-logos')
         .upload(filePath, file, {
           cacheControl: '3600',
           upsert: true,
-          contentType: file.type,
+          contentType: detectedContentType,
         });
 
       if (uploadError) {
@@ -359,9 +373,24 @@ export default function SettingsPage() {
         throw new Error(uploadError.message);
       }
 
-      console.log('Upload successful:', uploadData);
+      console.log('Upload successful, attempting metadata update...');
 
-      console.log('Upload successful:', uploadData);
+      // WORKAROUND: Update file metadata after upload to fix content-type
+      try {
+        const { error: updateError } = await supabase.storage
+          .from('retailer-logos')
+          .update(filePath, file, {
+            cacheControl: '3600',
+            upsert: true,
+            contentType: detectedContentType,
+          });
+        
+        if (!updateError) {
+          console.log('Metadata updated successfully');
+        }
+      } catch (e) {
+        console.log('Metadata update failed (non-critical):', e);
+      }
 
       // Get public URL
       const { data: urlData } = supabase.storage
