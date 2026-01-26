@@ -11,8 +11,8 @@ const navItems = [
   { name: 'PLANS', href: '/plans', icon: Sparkles },
   { name: 'COLLECT', href: '/collections', icon: Users },
   { name: 'REDEEM', href: '/redemptions', icon: Award },
-  { name: 'DUES', href: '/dashboard', icon: AlertCircle },
-  { name: 'GROWTH', href: '/dashboard', icon: TrendingUp },
+  { name: 'DUES', href: '/pulse', icon: AlertCircle },
+  { name: 'GROWTH', href: '/pulse', icon: TrendingUp },
 ];
 
 export function MobileNav() {

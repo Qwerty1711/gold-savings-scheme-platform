@@ -13,8 +13,8 @@ const navItems = [
   { name: 'Plans', href: '/plans', icon: Sparkles, description: 'Scheme Templates' },
   { name: 'Collections', href: '/collections', icon: Users, description: 'Payment Collection' },
   { name: 'Redemptions', href: '/redemptions', icon: Award, description: 'Withdrawals' },
-  { name: 'Dues', href: '/dashboard', icon: AlertCircle, description: 'Overdue Payments' },
-  { name: 'Growth', href: '/dashboard', icon: TrendingUp, description: 'Staff Performance' },
+  { name: 'Dues', href: '/pulse', icon: AlertCircle, description: 'Overdue Payments' },
+  { name: 'Growth', href: '/pulse', icon: TrendingUp, description: 'Staff Performance' },
   { name: 'Settings', href: '/settings', icon: Gem, description: 'Configuration' },
 ];
 
@@ -26,13 +26,15 @@ export function DesktopSidebar() {
     <aside className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-64 bg-card border-r border-border">
       <div className="flex flex-col flex-1 overflow-y-auto">
         <div className="flex items-center gap-3 p-6 border-b border-border">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center">
-            <Gem className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold gold-text">GoldSaver</h1>
-            <p className="text-xs text-muted-foreground">Premium Schemes</p>
-          </div>
+          <Link href="/pulse" className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center">
+              <Gem className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold gold-text">GoldSaver</h1>
+              <p className="text-xs text-muted-foreground">Premium Schemes</p>
+            </div>
+          </Link>
         </div>
 
         <nav className="flex-1 px-4 py-6 space-y-2">

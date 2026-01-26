@@ -99,7 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     if (error) throw error;
-    router.push('/dashboard');
+    router.push('/pulse');
   };
 
   const signOut = async () => {

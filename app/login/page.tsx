@@ -26,7 +26,7 @@ export default function LoginPage() {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
 
-      router.push('/dashboard');
+      router.push('/pulse');
     } catch (err: any) {
       setError(err?.message || 'Failed to sign in');
     } finally {
