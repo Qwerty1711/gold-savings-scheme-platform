@@ -788,17 +788,11 @@ export default function PulseDashboard() {
           grams_allocated_snapshot,
           rate_per_gram_snapshot,
           source,
+          enrollment_id,
           customers (
             id,
             full_name,
             phone
-          ),
-          enrollments (
-            id,
-            karat,
-            scheme_templates (
-              name
-            )
           )
         `)
         .eq('retailer_id', profile.retailer_id)
@@ -811,8 +805,40 @@ export default function PulseDashboard() {
 
       if (error) throw error;
 
+      // Fetch enrollment data for each transaction
+      let enrichedData = data || [];
+      if (enrichedData.length > 0) {
+        const enrollmentIds = [...new Set(enrichedData.map(t => t.enrollment_id).filter(Boolean))];
+        
+        if (enrollmentIds.length > 0) {
+          const { data: enrollmentsData } = await supabase
+            .from('enrollments')
+            .select(`
+              id,
+              karat,
+              plan_id,
+              scheme_templates:plan_id (
+                name
+              )
+            `)
+            .in('id', enrollmentIds);
+
+          // Create a map for quick lookup
+          const enrollmentMap = new Map();
+          enrollmentsData?.forEach(enrollment => {
+            enrollmentMap.set(enrollment.id, enrollment);
+          });
+
+          // Enrich transactions with enrollment data
+          enrichedData = enrichedData.map(txn => ({
+            ...txn,
+            enrollments: txn.enrollment_id ? enrollmentMap.get(txn.enrollment_id) : null
+          }));
+        }
+      }
+
       // Filter by transaction type if needed
-      let filteredData = data || [];
+      let filteredData = enrichedData;
       if (txnTypeFilter === 'COLLECTIONS') {
         filteredData = filteredData.filter(t => t.txn_type === 'PRIMARY_INSTALLMENT' || t.txn_type === 'TOP_UP');
       } else if (txnTypeFilter === 'REDEMPTIONS') {
