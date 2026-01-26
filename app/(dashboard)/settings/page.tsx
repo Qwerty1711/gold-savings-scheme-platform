@@ -319,32 +319,40 @@ export default function SettingsPage() {
 
     setUploadingLogo(true);
     try {
-      // Create a unique file name with proper extension
-      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'png';
-      const fileName = `logo.${fileExt}`; // Simple name, will overwrite
-      const filePath = `${profile.retailer_id}/${fileName}`;
-
-      console.log('Uploading logo:', { 
-        filePath, 
-        type: file.type, 
-        size: file.size,
-        name: file.name 
-      });
-
-      // Delete old file first to ensure clean upload
+      // Delete old files first
       try {
-        await supabase.storage
+        const { data: existingFiles } = await supabase.storage
           .from('retailer-logos')
-          .remove([filePath]);
+          .list(profile.retailer_id);
+        
+        if (existingFiles && existingFiles.length > 0) {
+          const filesToDelete = existingFiles.map(f => `${profile.retailer_id}/${f.name}`);
+          await supabase.storage.from('retailer-logos').remove(filesToDelete);
+        }
       } catch (e) {
-        // Ignore error if file doesn't exist
-        console.log('No old file to delete');
+        console.log('No old files to delete');
       }
 
-      // Upload new file
+      // Read file as ArrayBuffer to ensure binary upload
+      const arrayBuffer = await file.arrayBuffer();
+      const blob = new Blob([arrayBuffer], { type: file.type });
+      
+      // Create file path
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'png';
+      const fileName = `logo.${fileExt}`;
+      const filePath = `${profile.retailer_id}/${fileName}`;
+
+      console.log('Uploading:', { 
+        path: filePath, 
+        type: file.type,
+        size: blob.size,
+        originalSize: file.size
+      });
+
+      // Upload the blob
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('retailer-logos')
-        .upload(filePath, file, {
+        .upload(filePath, blob, {
           cacheControl: '3600',
           upsert: true,
           contentType: file.type,
