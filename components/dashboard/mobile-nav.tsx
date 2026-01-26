@@ -1,6 +1,6 @@
 'use client';
 
-import { Activity, Users, Sparkles, TrendingUp, AlertCircle, UserCircle, Award, Settings } from 'lucide-react';
+import { Activity, Users, Sparkles, TrendingUp, AlertCircle, UserCircle, Award } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -13,7 +13,6 @@ const navItems = [
   { name: 'REDEEM', href: '/redemptions', icon: Award },
   { name: 'DUES', href: '/dashboard', icon: AlertCircle },
   { name: 'GROWTH', href: '/dashboard', icon: TrendingUp },
-  { name: 'SETTINGS', href: '/settings', icon: Settings },
 ];
 
 export function MobileNav() {
