@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -16,32 +16,9 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [retailerName, setRetailerName] = useState('Sync4AI');
-  const [retailerLogo, setRetailerLogo] = useState<string | null>(null);
+  const [retailerName] = useState('GoldSaver');
+  const [retailerLogo] = useState<string | null>(null);
   const router = useRouter();
-
-  // Fetch retailer branding (if demo credentials are used or after login)
-  useEffect(() => {
-    async function fetchRetailerBranding() {
-      try {
-        // Try to get the first retailer's branding for the login page
-        const { data, error } = await supabase
-          .from('retailers')
-          .select('name, logo_url, business_name')
-          .limit(1)
-          .single();
-
-        if (data && !error) {
-          setRetailerName(data.name || data.business_name || 'Sync4AI');
-          setRetailerLogo(data.logo_url);
-        }
-      } catch (err) {
-        console.error('Error fetching retailer branding:', err);
-      }
-    }
-
-    fetchRetailerBranding();
-  }, []);
 
   async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -136,23 +113,7 @@ export default function LoginPage() {
           </CardContent>
         </Card>
 
-        {/* Demo credentials */}
-        <Card className="bg-primary/5 border-primary/20">
-          <CardContent className="pt-6">
-            <div className="text-center space-y-2">
-              <h3 className="font-semibold">Demo Credentials</h3>
-              <p className="text-sm text-muted-foreground">
-                Email:{' '}
-                <code className="px-2 py-1 rounded bg-muted">demo@goldsaver.com</code>
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Password: <code className="px-2 py-1 rounded bg-muted">demo123</code>
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="text-center text-sm text-muted-foreground">
+        <div className="text-center text-sm text-muted-foreground mt-4">
           <p>© 2026 {retailerName}. All rights reserved.</p>
         </div>
       </div>

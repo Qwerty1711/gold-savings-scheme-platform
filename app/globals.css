@@ -93,23 +93,39 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
-    letter-spacing: 0.3px;
+    letter-spacing: -0.02em;
+    font-weight: 500;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   h1 {
     @apply text-5xl font-bold tracking-tight;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+    font-weight: 700;
+    letter-spacing: -0.03em;
   }
 
   h2 {
     @apply text-4xl font-bold tracking-tight;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
+    font-weight: 700;
+    letter-spacing: -0.03em;
   }
 
   h3 {
     @apply text-2xl font-bold tracking-tight;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    font-weight: 700;
+    letter-spacing: -0.02em;
   }
 
   h4, h5, h6 {
     @apply text-lg font-semibold tracking-tight;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+    font-weight: 700;
+    letter-spacing: -0.02em;
   }
 
   p {
@@ -144,140 +160,196 @@
   
   .luxury-gold-gradient {
     background: linear-gradient(135deg,
-      hsl(var(--gold-300)) 0%,
-      hsl(var(--gold-400)) 25%,
-      hsl(var(--gold-500)) 50%,
-      hsl(var(--gold-600)) 100%);
+      #FFE89F 0%,
+      #FFD700 15%,
+      #FDB931 30%,
+      #FFED4E 50%,
+      #FDB931 70%,
+      #C9A227 85%,
+      #FFD700 100%);
+    box-shadow: 
+      0 10px 40px rgba(255, 215, 0, 0.4),
+      inset 0 2px 4px rgba(255, 255, 255, 0.5),
+      inset 0 -2px 4px rgba(0, 0, 0, 0.1);
   }
 
   .rich-gold-radial {
     background: radial-gradient(circle at 30% 30%,
-      hsl(var(--gold-400)) 0%,
-      hsl(var(--gold-600)) 70%);
+      #FFED4E 0%,
+      #FFD700 30%,
+      #FDB931 60%,
+      #C9A227 100%);
+    box-shadow: 
+      0 10px 35px rgba(255, 215, 0, 0.35),
+      inset 0 1px 3px rgba(255, 255, 255, 0.4);
   }
 
   .rose-gold-gradient {
     background: linear-gradient(135deg,
-      hsl(14 54% 75%) 0%,
-      hsl(39 89% 55%) 50%,
-      hsl(25 55% 55%) 100%);
+      #FFD4D4 0%,
+      #E0AC69 25%,
+      #FFD700 50%,
+      #C77F3B 75%,
+      #FFB347 100%);
+    box-shadow: 
+      0 10px 35px rgba(224, 172, 105, 0.35),
+      inset 0 2px 4px rgba(255, 255, 255, 0.4);
   }
 
   .royal-metal-gradient {
     background: conic-gradient(from 0deg,
-      hsl(39 89% 50%) 0deg,
-      hsl(14 54% 65%) 120deg,
-      hsl(25 55% 50%) 240deg,
-      hsl(39 89% 50%) 360deg);
+      #FFD700 0deg,
+      #FFED4E 60deg,
+      #FDB931 120deg,
+      #E0AC69 180deg,
+      #C77F3B 240deg,
+      #FDB931 300deg,
+      #FFD700 360deg);
+    box-shadow: 
+      0 15px 45px rgba(255, 215, 0, 0.4),
+      inset 0 2px 5px rgba(255, 255, 255, 0.5);
   }
 
   .premium-shimmer {
     background: linear-gradient(90deg,
-      hsl(var(--gold-400)) 0%,
-      hsl(var(--gold-300)) 25%,
-      hsl(var(--gold-400)) 50%,
-      hsl(var(--gold-500)) 75%,
-      hsl(var(--gold-400)) 100%);
+      #FFD700 0%,
+      #FFED4E 20%,
+      #FFE89F 40%,
+      #FFED4E 60%,
+      #FFD700 80%,
+      #FDB931 100%);
     background-size: 200% 100%;
+    animation: shimmer 3s ease-in-out infinite;
   }
 
   .gold-gradient {
     background: linear-gradient(135deg,
-      hsl(var(--gold-400)) 0%,
-      hsl(var(--gold-500)) 50%,
-      hsl(var(--gold-600)) 100%);
+      #FFED4E 0%,
+      #FFD700 25%,
+      #FDB931 50%,
+      #C9A227 75%,
+      #FFD700 100%);
+    box-shadow: 
+      0 8px 30px rgba(255, 215, 0, 0.4),
+      inset 0 1px 3px rgba(255, 255, 255, 0.5),
+      inset 0 -1px 2px rgba(0, 0, 0, 0.1);
   }
 
   .gold-gradient-shimmer {
     background: linear-gradient(135deg,
-      hsl(var(--gold-300)) 0%,
-      hsl(var(--gold-400)) 25%,
-      hsl(var(--gold-500)) 50%,
-      hsl(var(--gold-400)) 75%,
-      hsl(var(--gold-300)) 100%);
+      #FFE89F 0%,
+      #FFED4E 20%,
+      #FFD700 40%,
+      #FDB931 50%,
+      #FFD700 60%,
+      #FFED4E 80%,
+      #FFE89F 100%);
     background-size: 200% 200%;
+    animation: shimmer 4s ease-in-out infinite;
   }
 
   .jewel-gradient {
     background: linear-gradient(135deg,
-      #FFD700 0%,
-      #FDB931 25%,
-      #FFED4E 50%,
+      #FFE89F 0%,
+      #FFED4E 15%,
+      #FFD700 30%,
+      #FDB931 45%,
+      #FFED4E 60%,
       #FDB931 75%,
-      #FFD700 100%);
+      #FFD700 90%,
+      #FFE89F 100%);
+    box-shadow: 
+      0 12px 40px rgba(255, 215, 0, 0.45),
+      inset 0 2px 5px rgba(255, 255, 255, 0.6),
+      inset 0 -2px 5px rgba(0, 0, 0, 0.15);
   }
 
   /* ============ LUXURY CARD STYLES ============ */
   
   .luxury-card {
-    @apply rounded-2xl bg-gradient-to-br from-white/95 via-white/90 to-gold-50/40 border border-gold-200/60;
+    @apply rounded-2xl bg-gradient-to-br from-white via-gold-50/30 to-gold-100/40 border-2 border-gold-300/70;
     box-shadow:
-      0 20px 60px -10px rgba(39, 89, 49, 0.15),
-      0 0 0 1px rgba(39, 89, 49, 0.08) inset,
-      inset -1px -1px 2px rgba(0, 0, 0, 0.02);
+      0 25px 70px -10px rgba(255, 215, 0, 0.25),
+      0 0 0 1px rgba(255, 215, 0, 0.15) inset,
+      inset 0 1px 3px rgba(255, 255, 255, 0.8),
+      inset -2px -2px 6px rgba(0, 0, 0, 0.05);
+    backdrop-filter: blur(10px);
   }
 
   .dark .luxury-card {
-    @apply from-zinc-900/95 via-zinc-900/90 to-zinc-800/80 border-gold-500/20;
+    @apply from-zinc-900/95 via-zinc-800/90 to-zinc-900/85 border-gold-400/40;
     box-shadow:
-      0 20px 60px -10px rgba(39, 89, 49, 0.25),
-      0 0 0 1px rgba(255, 215, 0, 0.15) inset;
+      0 25px 70px -10px rgba(255, 215, 0, 0.35),
+      0 0 0 1px rgba(255, 215, 0, 0.25) inset,
+      inset 0 1px 3px rgba(255, 215, 0, 0.1);
   }
 
   .jewelry-showcase-card {
-    @apply rounded-3xl overflow-hidden border border-gold-200/80;
+    @apply rounded-3xl overflow-hidden border-2 border-gold-300/90;
     background: linear-gradient(135deg,
-      rgba(255, 255, 255, 0.95) 0%,
-      rgba(254, 252, 248, 0.90) 100%);
+      rgba(255, 255, 255, 1) 0%,
+      rgba(254, 250, 240, 0.95) 50%,
+      rgba(255, 248, 220, 0.90) 100%);
     box-shadow:
-      0 0 40px rgba(39, 89, 49, 0.12),
-      0 10px 30px rgba(39, 89, 49, 0.08),
-      inset 0 1px 2px rgba(255, 255, 255, 0.8);
+      0 0 50px rgba(255, 215, 0, 0.20),
+      0 15px 40px rgba(255, 215, 0, 0.15),
+      inset 0 2px 4px rgba(255, 255, 255, 0.9),
+      inset 0 -1px 2px rgba(255, 215, 0, 0.1);
   }
 
   .jewelry-showcase-card:hover {
     box-shadow:
-      0 0 50px rgba(39, 89, 49, 0.20),
-      0 20px 50px rgba(39, 89, 49, 0.15),
-      inset 0 1px 2px rgba(255, 255, 255, 0.8);
+      0 0 60px rgba(255, 215, 0, 0.30),
+      0 25px 60px rgba(255, 215, 0, 0.25),
+      inset 0 2px 4px rgba(255, 255, 255, 0.9),
+      inset 0 -1px 2px rgba(255, 215, 0, 0.2);
+    transform: translateY(-2px);
+    transition: all 0.3s ease;
   }
 
   .dark .jewelry-showcase-card {
     background: linear-gradient(135deg,
-      rgba(30, 20, 15, 0.95) 0%,
-      rgba(24, 16, 10, 0.90) 100%);
+      rgba(30, 20, 15, 0.98) 0%,
+      rgba(24, 16, 10, 0.95) 50%,
+      rgba(20, 14, 8, 0.90) 100%);
     box-shadow:
-      0 0 40px rgba(39, 89, 49, 0.20),
-      0 10px 30px rgba(39, 89, 49, 0.12);
+      0 0 50px rgba(255, 215, 0, 0.30),
+      0 15px 40px rgba(255, 215, 0, 0.20),
+      inset 0 1px 2px rgba(255, 215, 0, 0.15);
   }
 
   .dark .jewelry-showcase-card:hover {
     box-shadow:
-      0 0 50px rgba(39, 89, 49, 0.30),
-      0 20px 50px rgba(39, 89, 49, 0.20);
+      0 0 60px rgba(255, 215, 0, 0.40),
+      0 25px 60px rgba(255, 215, 0, 0.30),
+      inset 0 1px 2px rgba(255, 215, 0, 0.2);
   }
 
   .jewel-card {
-    @apply rounded-3xl bg-gradient-to-br from-white/90 to-gold-50/50 border border-gold-200/50;
+    @apply rounded-3xl bg-gradient-to-br from-white via-gold-50/60 to-gold-100/70 border-2 border-gold-300/70;
     box-shadow:
-      0 10px 40px -10px rgba(255, 215, 0, 0.2),
-      0 0 0 1px rgba(255, 215, 0, 0.1) inset;
+      0 15px 50px -10px rgba(255, 215, 0, 0.3),
+      0 0 0 1px rgba(255, 215, 0, 0.2) inset,
+      inset 0 1px 3px rgba(255, 255, 255, 0.9),
+      inset 0 -1px 2px rgba(255, 215, 0, 0.1);
   }
 
   .dark .jewel-card {
-    @apply from-zinc-900/90 to-zinc-800/90 border-gold-600/30;
+    @apply from-zinc-900/95 via-zinc-800/90 to-zinc-900/85 border-gold-500/40;
     box-shadow:
-      0 10px 40px -10px rgba(255, 215, 0, 0.3),
-      0 0 0 1px rgba(255, 215, 0, 0.2) inset;
+      0 15px 50px -10px rgba(255, 215, 0, 0.4),
+      0 0 0 1px rgba(255, 215, 0, 0.3) inset,
+      inset 0 1px 2px rgba(255, 215, 0, 0.15);
   }
 
   /* ============ SPARKLE & GLOW EFFECTS ============ */
   
   .sparkle-bg {
     background-image:
-      radial-gradient(circle at 20% 30%, rgba(255, 215, 0, 0.1) 0%, transparent 50%),
-      radial-gradient(circle at 80% 70%, rgba(255, 215, 0, 0.08) 0%, transparent 50%),
-      radial-gradient(circle at 50% 50%, rgba(255, 215, 0, 0.05) 0%, transparent 50%);
+      radial-gradient(circle at 20% 30%, rgba(255, 215, 0, 0.2) 0%, transparent 50%),
+      radial-gradient(circle at 80% 70%, rgba(255, 215, 0, 0.15) 0%, transparent 50%),
+      radial-gradient(circle at 50% 50%, rgba(255, 237, 78, 0.12) 0%, transparent 50%),
+      radial-gradient(circle at 10% 80%, rgba(255, 215, 0, 0.1) 0%, transparent 50%);
   }
 
   .gold-sparkle {
@@ -289,29 +361,110 @@
     position: absolute;
     inset: 0;
     background-image:
-      radial-gradient(circle at 20% 30%, rgba(255, 215, 0, 0.15) 0%, transparent 40%),
-      radial-gradient(circle at 80% 70%, rgba(39, 89, 49, 0.08) 0%, transparent 50%),
-      radial-gradient(circle at 50% 50%, rgba(255, 215, 0, 0.05) 0%, transparent 60%);
+      radial-gradient(circle at 20% 30%, rgba(255, 237, 78, 0.25) 0%, transparent 40%),
+      radial-gradient(circle at 80% 70%, rgba(255, 215, 0, 0.18) 0%, transparent 50%),
+      radial-gradient(circle at 50% 50%, rgba(255, 215, 0, 0.12) 0%, transparent 60%),
+      radial-gradient(circle at 30% 90%, rgba(255, 237, 78, 0.15) 0%, transparent 45%);
     pointer-events: none;
+    animation: sparkle-float 6s ease-in-out infinite;
   }
 
   .glitter-overlay {
     position: relative;
+    box-shadow: 
+      0 0 30px rgba(255, 215, 0, 0.3),
+      inset 0 1px 3px rgba(255, 255, 255, 0.6),
+      inset 0 -1px 2px rgba(255, 215, 0, 0.2);
   }
 
   /* Removed expensive pseudo-element overlay for performance */
 
   /* ============ TEXT & TYPOGRAPHY ============ */
   
-  .gold-text {
-    background: linear-gradient(to right, hsl(var(--gold-400)), hsl(var(--gold-500)), hsl(var(--gold-600)));
+  .metallic-black {
+    color: #1a1a1a;
+    text-shadow: 
+      0 1px 2px rgba(255, 255, 255, 0.3),
+      0 -1px 1px rgba(0, 0, 0, 0.5),
+      0 2px 4px rgba(0, 0, 0, 0.2);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .dark .metallic-black {
+    color: #f5f5f5;
+    text-shadow: 
+      0 1px 3px rgba(0, 0, 0, 0.8),
+      0 -1px 1px rgba(255, 255, 255, 0.1),
+      0 2px 6px rgba(0, 0, 0, 0.4);
+  }
+
+  .glossy-black {
+    background: linear-gradient(180deg, #2d2d2d 0%, #0a0a0a 50%, #1a1a1a 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .dark .glossy-black {
+    background: linear-gradient(180deg, #ffffff 0%, #e0e0e0 50%, #f5f5f5 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
   }
+  
+  .gold-text {
+    background: linear-gradient(135deg, 
+      #FFD700 0%, 
+      #FDB931 20%,
+      #FFED4E 40%, 
+      #FDB931 60%,
+      #C9A227 80%,
+      #FFD700 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 2px 8px rgba(255, 215, 0, 0.4);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
 
   .gold-glow {
-    text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+    text-shadow: 
+      0 0 10px rgba(255, 215, 0, 0.8),
+      0 0 20px rgba(255, 215, 0, 0.6),
+      0 0 30px rgba(255, 215, 0, 0.4),
+      0 2px 4px rgba(0, 0, 0, 0.3);
+    font-weight: 700;
+  }
+
+  .metallic-gold {
+    background: linear-gradient(180deg,
+      #FFE89F 0%,
+      #FFD700 25%,
+      #C9A227 50%,
+      #FFD700 75%,
+      #FFED4E 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 3px 10px rgba(255, 215, 0, 0.5);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .glossy-text {
+    background: linear-gradient(180deg,
+      rgba(255, 255, 255, 0.9) 0%,
+      rgba(255, 255, 255, 0.6) 50%,
+      rgba(255, 255, 255, 0.4) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
   }
 
   .gradient-text {
@@ -324,42 +477,91 @@
   /* ============ GLASS MORPHISM ============ */
   
   .glass-card {
-    background: rgba(255, 255, 255, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.5);
+    background: linear-gradient(135deg,
+      rgba(255, 255, 255, 0.95) 0%,
+      rgba(255, 255, 255, 0.85) 50%,
+      rgba(255, 250, 240, 0.90) 100%);
+    border: 2px solid rgba(255, 215, 0, 0.3);
+    box-shadow: 
+      0 20px 60px rgba(255, 215, 0, 0.2),
+      inset 0 2px 4px rgba(255, 255, 255, 0.9),
+      inset 0 -1px 2px rgba(255, 215, 0, 0.1);
+    backdrop-filter: blur(15px);
   }
 
   .dark .glass-card {
-    background: rgba(30, 25, 20, 0.7);
-    border: 1px solid rgba(255, 215, 0, 0.1);
+    background: linear-gradient(135deg,
+      rgba(30, 25, 20, 0.85) 0%,
+      rgba(20, 18, 15, 0.75) 50%,
+      rgba(25, 20, 15, 0.80) 100%);
+    border: 2px solid rgba(255, 215, 0, 0.25);
+    box-shadow: 
+      0 20px 60px rgba(255, 215, 0, 0.3),
+      inset 0 1px 3px rgba(255, 215, 0, 0.2);
+    backdrop-filter: blur(15px);
   }
 
   /* ============ PREMIUM SHADOWS ============ */
   
   .shadow-luxury {
-    box-shadow: 0 20px 60px -10px rgba(39, 89, 49, 0.15);
+    box-shadow: 
+      0 25px 70px -10px rgba(255, 215, 0, 0.25),
+      0 0 0 1px rgba(255, 215, 0, 0.1) inset;
   }
 
   .shadow-luxury-lg {
-    box-shadow: 0 30px 80px -15px rgba(39, 89, 49, 0.2);
+    box-shadow: 
+      0 35px 90px -15px rgba(255, 215, 0, 0.3),
+      0 0 0 1px rgba(255, 215, 0, 0.15) inset,
+      inset 0 1px 3px rgba(255, 255, 255, 0.4);
   }
 
   .shadow-luxury-xl {
-    box-shadow: 0 40px 100px -20px rgba(39, 89, 49, 0.25);
+    box-shadow: 
+      0 45px 110px -20px rgba(255, 215, 0, 0.35),
+      0 0 0 1px rgba(255, 215, 0, 0.2) inset,
+      inset 0 2px 4px rgba(255, 255, 255, 0.5);
   }
 
   /* ============ ICON DOCK ============ */
   
   .icon-dock {
-    @apply flex items-center gap-2 p-3 rounded-2xl bg-white/90 dark:bg-zinc-900/90 border border-gold-200/30 dark:border-gold-600/30;
-    box-shadow: 0 8px 32px rgba(255, 215, 0, 0.15);
+    @apply flex items-center gap-2 p-3 rounded-2xl border-2 border-gold-300/50;
+    background: linear-gradient(135deg,
+      rgba(255, 255, 255, 0.95) 0%,
+      rgba(255, 250, 240, 0.90) 100%);
+    box-shadow: 
+      0 10px 40px rgba(255, 215, 0, 0.25),
+      inset 0 1px 3px rgba(255, 255, 255, 0.8);
+  }
+
+  .dark .icon-dock {
+    background: linear-gradient(135deg,
+      rgba(24, 20, 15, 0.95) 0%,
+      rgba(18, 15, 10, 0.90) 100%);
+    border-color: rgba(255, 215, 0, 0.4);
+    box-shadow: 
+      0 10px 40px rgba(255, 215, 0, 0.35),
+      inset 0 1px 2px rgba(255, 215, 0, 0.2);
   }
 
   .dock-icon {
-    @apply relative flex flex-col items-center justify-center gap-1 px-4 py-3 rounded-xl hover:bg-gold-50 dark:hover:bg-gold-900/20 cursor-pointer;
+    @apply relative flex flex-col items-center justify-center gap-1 px-4 py-3 rounded-xl hover:bg-gold-100/60 dark:hover:bg-gold-900/30 cursor-pointer;
+    transition: all 0.2s ease;
+  }
+
+  .dock-icon:hover {
+    box-shadow: 
+      0 4px 15px rgba(255, 215, 0, 0.2),
+      inset 0 1px 2px rgba(255, 255, 255, 0.5);
+    transform: translateY(-2px);
   }
 
   .dock-icon.active {
-    @apply bg-gold-100 dark:bg-gold-900/30;
+    @apply bg-gradient-to-br from-gold-100 to-gold-200/80 dark:from-gold-900/40 dark:to-gold-800/30;
+    box-shadow: 
+      0 4px 15px rgba(255, 215, 0, 0.3),
+      inset 0 1px 2px rgba(255, 255, 255, 0.6);
   }
 
   .dock-icon::after {
