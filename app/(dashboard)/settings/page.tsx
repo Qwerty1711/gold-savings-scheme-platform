@@ -360,6 +360,12 @@ export default function SettingsPage() {
 
       if (uploadError) {
         console.error('Upload error:', uploadError);
+        
+        // Check if it's a policy/permission error
+        if (uploadError.message?.includes('policy') || uploadError.message?.includes('permission')) {
+          throw new Error('Storage permissions not configured. Please configure RLS policies in Supabase Dashboard → Storage → Policies');
+        }
+        
         throw new Error(uploadError.message || 'Failed to upload file to storage');
       }
 
