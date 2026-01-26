@@ -121,13 +121,15 @@ export default function SettingsPage() {
     }
   }, [profile, router]);
 
+  // Initial load - load settings only once
   useEffect(() => {
     void loadSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.retailer_id]);
 
+  // Separate effect for rate history filters (don't reload everything)
   useEffect(() => {
-    if (profile?.retailer_id) {
+    if (profile?.retailer_id && !loading) {
       void loadRateHistory();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -138,43 +140,42 @@ export default function SettingsPage() {
 
     setLoading(true);
     try {
-      // Load retailer settings
-      const { data: retailerData, error: retailerError } = await supabase
-        .from('retailers')
-        .select('*')
-        .eq('id', profile.retailer_id)
-        .maybeSingle();
+      // **PERFORMANCE FIX: Run all queries in PARALLEL**
+      const [retailerResult, staffResult, storesResult] = await Promise.all([
+        // Load retailer settings (only needed columns)
+        supabase
+          .from('retailers')
+          .select('id, name, business_name, legal_name, email, phone, address')
+          .eq('id', profile.retailer_id)
+          .maybeSingle(),
+        
+        // Load staff members (limit to 50, most recent)
+        supabase
+          .from('user_profiles')
+          .select('id, full_name, phone, employee_id, role, store_id, created_at, stores(name)')
+          .eq('retailer_id', profile.retailer_id)
+          .order('created_at', { ascending: false })
+          .limit(50),
+        
+        // Load stores
+        supabase
+          .from('stores')
+          .select('id, name, store_name, code, address, phone, is_active, created_at')
+          .eq('retailer_id', profile.retailer_id)
+          .eq('is_active', true)
+          .order('created_at', { ascending: true })
+      ]);
 
-      if (retailerError) throw retailerError;
-      setRetailerSettings(retailerData);
+      if (retailerResult.error) throw retailerResult.error;
+      if (staffResult.error) throw staffResult.error;
+      if (storesResult.error) throw storesResult.error;
 
-      // Load staff members with store info
-      const { data: staffData, error: staffError } = await supabase
-        .from('user_profiles')
-        .select('id, full_name, phone, employee_id, role, store_id, created_at, stores(name)')
-        .eq('retailer_id', profile.retailer_id)
-        .order('created_at', { ascending: false });
+      setRetailerSettings(retailerResult.data);
+      setStaffMembers(staffResult.data || []);
+      setStores(storesResult.data || []);
 
-      if (staffError) {
-        console.error('Error loading staff:', staffError);
-        throw staffError;
-      }
-      setStaffMembers(staffData || []);
-
-      // Load stores
-      const { data: storesData, error: storesError} = await supabase
-        .from('stores')
-        .select('*')
-        .eq('retailer_id', profile.retailer_id)
-        .order('created_at', { ascending: true });
-
-      if (storesError) throw storesError;
-      
-      console.log('Loaded stores for retailer:', profile.retailer_id, storesData);
-      setStores(storesData || []);
-
-      // Load rate history with proper query
-      await loadRateHistory();
+      // Load rate history separately (heavy query)
+      void loadRateHistory();
     } catch (error) {
       console.error('Error loading settings:', error);
       // Don't show error toast, just log it
@@ -188,19 +189,13 @@ export default function SettingsPage() {
 
     setLoadingRates(true);
     try {
+      // **PERFORMANCE FIX: Limit query, only fetch needed columns**
       let query = supabase
         .from('gold_rates')
-        .select(`
-          id,
-          karat,
-          rate_per_gram,
-          effective_from,
-          created_at,
-          created_by,
-          user_profiles!gold_rates_created_by_fkey(full_name)
-        `)
+        .select('id, karat, rate_per_gram, effective_from, created_at, created_by, user_profiles!gold_rates_created_by_fkey(full_name)')
         .eq('retailer_id', profile.retailer_id)
-        .order('effective_from', { ascending: false });
+        .order('effective_from', { ascending: false })
+        .limit(50); // Only load last 50 rates
 
       // Apply karat filter
       if (selectedKarat && selectedKarat !== 'ALL') {
@@ -217,29 +212,23 @@ export default function SettingsPage() {
         query = query.lte('effective_from', endDateTime.toISOString());
       }
 
-      const { data, error } = await query.limit(100);
+      const { data, error } = await query;
 
       if (error) throw error;
 
-      // Transform data to include staff name and calculate changes
-      const transformedData = (data || []).map((rate: any, index: number) => {
-        const nextRate = index < data.length - 1 ? data[index + 1] : null;
-        const previousRate = nextRate?.rate_per_gram || null;
-        const changePercentage = previousRate
-          ? ((rate.rate_per_gram - previousRate) / previousRate) * 100
-          : null;
-
-        return {
-          id: rate.id,
-          karat: rate.karat,
-          rate_per_gram: rate.rate_per_gram,
-          effective_from: rate.effective_from,
-          created_at: rate.created_at,
-          updated_by_name: rate.user_profiles?.full_name || 'Unknown',
-          previous_rate: previousRate,
-          change_percentage: changePercentage,
-        };
-      });
+      // **PERFORMANCE FIX: Simplified transformation**
+      const transformedData = (data || []).map((rate: any, index: number) => ({
+        id: rate.id,
+        karat: rate.karat,
+        rate_per_gram: rate.rate_per_gram,
+        effective_from: rate.effective_from,
+        created_at: rate.created_at,
+        updated_by_name: rate.user_profiles?.full_name || 'Unknown',
+        previous_rate: index < data.length - 1 ? data[index + 1].rate_per_gram : null,
+        change_percentage: index < data.length - 1 
+          ? ((rate.rate_per_gram - data[index + 1].rate_per_gram) / data[index + 1].rate_per_gram) * 100
+          : null,
+      }));
 
       setRateHistory(transformedData);
     } catch (error) {
@@ -330,26 +319,14 @@ export default function SettingsPage() {
 
     setUploadingLogo(true);
     try {
-      // Check if bucket exists
-      const { data: buckets, error: bucketError } = await supabase.storage.listBuckets();
-      
-      if (bucketError) {
-        console.error('Bucket check error:', bucketError);
-        throw new Error('Unable to access storage. Please contact support.');
-      }
-
-      const bucketExists = buckets?.some(b => b.id === 'retailer-logos');
-      
-      if (!bucketExists) {
-        throw new Error('Storage not configured. Please run the SQL migration: 20260126_setup_storage_for_logos.sql');
-      }
-
       // Create a unique file name
       const fileExt = file.name.split('.').pop();
       const fileName = `${profile.retailer_id}-${Date.now()}.${fileExt}`;
       const filePath = `${profile.retailer_id}/${fileName}`;
 
-      // Upload to Supabase Storage with content-type
+      console.log('Uploading logo to:', filePath);
+
+      // Upload to Supabase Storage
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('retailer-logos')
         .upload(filePath, file, {
@@ -359,15 +336,23 @@ export default function SettingsPage() {
         });
 
       if (uploadError) {
-        console.error('Upload error:', uploadError);
+        console.error('Upload error details:', uploadError);
         
-        // Check if it's a policy/permission error
-        if (uploadError.message?.includes('policy') || uploadError.message?.includes('permission')) {
-          throw new Error('Storage permissions not configured. Please configure RLS policies in Supabase Dashboard → Storage → Policies');
+        // Provide helpful error messages
+        if (uploadError.message?.includes('Bucket not found')) {
+          throw new Error('Storage bucket "retailer-logos" not found. Please create it in Supabase Dashboard → Storage → New Bucket');
         }
         
-        throw new Error(uploadError.message || 'Failed to upload file to storage');
+        if (uploadError.message?.includes('policy') || uploadError.message?.includes('permission') || uploadError.message?.includes('violates')) {
+          throw new Error('Permission denied. Please add storage policies: Dashboard → Storage → Policies → New Policy (see FIX_LOGO_UPLOAD_UI.md)');
+        }
+        
+        throw new Error(uploadError.message || 'Failed to upload file');
       }
+
+      console.log('Upload successful:', uploadData);
+
+      console.log('Upload successful:', uploadData);
 
       // Get public URL
       const { data: urlData } = supabase.storage
@@ -375,6 +360,7 @@ export default function SettingsPage() {
         .getPublicUrl(filePath);
 
       const logoUrl = urlData.publicUrl;
+      console.log('Logo URL:', logoUrl);
 
       // Update retailer record with logo URL
       const { error: updateError } = await supabase
@@ -382,7 +368,10 @@ export default function SettingsPage() {
         .update({ logo_url: logoUrl })
         .eq('id', profile.retailer_id);
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('Database update error:', updateError);
+        throw new Error('Failed to save logo URL to database');
+      }
 
       // Update local state
       if (retailerSettings) {
@@ -390,19 +379,13 @@ export default function SettingsPage() {
       }
       setLogoPreview(logoUrl);
 
-      // Refresh branding context to update header/logo
+      // Refresh branding context
       await refreshBranding();
 
       toast.success('✅ Logo uploaded successfully!');
     } catch (error: any) {
-      console.error('Error uploading logo:', error);
-      const errorMessage = error?.message || 'Unknown error';
-      
-      if (errorMessage.includes('Bucket not found') || errorMessage.includes('bucket not configured')) {
-        toast.error('Storage not configured. Please run the SQL migration first.');
-      } else {
-        toast.error(`Failed to upload logo: ${errorMessage}`);
-      }
+      console.error('Logo upload error:', error);
+      toast.error(error?.message || 'Failed to upload logo');
     } finally {
       setUploadingLogo(false);
     }
