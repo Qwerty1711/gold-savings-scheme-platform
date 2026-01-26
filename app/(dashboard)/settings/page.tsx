@@ -189,10 +189,10 @@ export default function SettingsPage() {
 
     setLoadingRates(true);
     try {
-      // **PERFORMANCE FIX: Limit query, only fetch needed columns**
+      // **PERFORMANCE FIX: Simplified query without problematic join**
       let query = supabase
         .from('gold_rates')
-        .select('id, karat, rate_per_gram, effective_from, created_at, created_by, user_profiles!gold_rates_created_by_fkey(full_name)')
+        .select('id, karat, rate_per_gram, effective_from, created_at')
         .eq('retailer_id', profile.retailer_id)
         .order('effective_from', { ascending: false })
         .limit(50); // Only load last 50 rates
@@ -223,7 +223,7 @@ export default function SettingsPage() {
         rate_per_gram: rate.rate_per_gram,
         effective_from: rate.effective_from,
         created_at: rate.created_at,
-        updated_by_name: rate.user_profiles?.full_name || 'Unknown',
+        updated_by_name: 'Admin', // Simplified - no join needed
         previous_rate: index < data.length - 1 ? data[index + 1].rate_per_gram : null,
         change_percentage: index < data.length - 1 
           ? ((rate.rate_per_gram - data[index + 1].rate_per_gram) / data[index + 1].rate_per_gram) * 100
@@ -321,33 +321,38 @@ export default function SettingsPage() {
     try {
       // Create a unique file name with proper extension
       const fileExt = file.name.split('.').pop()?.toLowerCase() || 'png';
-      const fileName = `logo-${Date.now()}.${fileExt}`;
+      const fileName = `logo.${fileExt}`; // Simple name, will overwrite
       const filePath = `${profile.retailer_id}/${fileName}`;
 
-      console.log('Uploading logo:', { filePath, type: file.type, size: file.size });
+      console.log('Uploading logo:', { 
+        filePath, 
+        type: file.type, 
+        size: file.size,
+        name: file.name 
+      });
 
-      // Upload to Supabase Storage with explicit content type
+      // Delete old file first to ensure clean upload
+      try {
+        await supabase.storage
+          .from('retailer-logos')
+          .remove([filePath]);
+      } catch (e) {
+        // Ignore error if file doesn't exist
+        console.log('No old file to delete');
+      }
+
+      // Upload new file
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('retailer-logos')
         .upload(filePath, file, {
           cacheControl: '3600',
-          upsert: true, // Allow overwrite
-          contentType: file.type || 'image/png',
+          upsert: true,
+          contentType: file.type,
         });
 
       if (uploadError) {
-        console.error('Upload error details:', uploadError);
-        
-        // Provide helpful error messages
-        if (uploadError.message?.includes('Bucket not found')) {
-          throw new Error('Storage bucket "retailer-logos" not found. Please create it in Supabase Dashboard → Storage → New Bucket');
-        }
-        
-        if (uploadError.message?.includes('policy') || uploadError.message?.includes('permission') || uploadError.message?.includes('violates')) {
-          throw new Error('Permission denied. Please add storage policies: Dashboard → Storage → Policies → New Policy (see FIX_LOGO_UPLOAD_UI.md)');
-        }
-        
-        throw new Error(uploadError.message || 'Failed to upload file');
+        console.error('Upload error:', uploadError);
+        throw new Error(uploadError.message);
       }
 
       console.log('Upload successful:', uploadData);
