@@ -35,7 +35,7 @@ export function TopBar() {
       <div className="flex items-center justify-between px-8 py-5 gap-4">
         {/* Logo Section - Premium */}
         <Link href="/pulse" className="flex items-center gap-4 flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity">
-          <AnimatedLogo logoUrl={branding.logoUrl} size="md" showAnimation={true} />
+          <AnimatedLogo logoUrl={null} size="md" showAnimation={true} />
           <div>
             <h2 className="text-xl font-bold gold-text">{branding.name}</h2>
             <p className="text-xs font-medium text-gold-600 dark:text-gold-400">Premium Suite</p>

@@ -30,7 +30,7 @@ export function DesktopSidebar() {
       <div className="flex flex-col flex-1 overflow-y-auto">
         <div className="flex items-center gap-3 p-6 border-b border-border">
           <Link href="/pulse" className="flex items-center gap-3">
-            <AnimatedLogo logoUrl={branding.logoUrl} size="md" showAnimation={false} />
+            <AnimatedLogo logoUrl={null} size="md" showAnimation={false} />
             <div>
               <h1 className="text-lg font-bold gold-text">{branding.name}</h1>
               <p className="text-xs text-muted-foreground">Premium Schemes</p>

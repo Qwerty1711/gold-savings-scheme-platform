@@ -54,7 +54,7 @@ function LoginForm() {
         {/* Header */}
         <div className="text-center space-y-2">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <AnimatedLogo logoUrl={branding.logoUrl} size="lg" showAnimation={true} />
+            <AnimatedLogo logoUrl={null} size="lg" showAnimation={true} />
           </div>
 
           {/* Retailer Name Banner */}

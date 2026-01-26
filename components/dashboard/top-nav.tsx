@@ -37,7 +37,7 @@ export function TopNav() {
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center">
         <Link href="/dashboard" className="flex items-center gap-3">
-          <AnimatedLogo logoUrl={branding.logoUrl} size="md" showAnimation={false} />
+          <AnimatedLogo logoUrl={null} size="md" showAnimation={false} />
           <div className="hidden sm:block">
             <h1 className="text-lg font-bold gold-text">{branding.name}</h1>
             <p className="text-[10px] text-muted-foreground -mt-1">Premium Gold Schemes</p>
@@ -107,7 +107,7 @@ export function TopNav() {
             </SheetTrigger>
             <SheetContent side="right" className="w-72">
               <div className="flex items-center gap-3 mb-8">
-                <AnimatedLogo logoUrl={branding.logoUrl} size="md" showAnimation={false} />
+                <AnimatedLogo logoUrl={null} size="md" showAnimation={false} />
                 <div>
                   <h1 className="text-lg font-bold gold-text">{branding.name}</h1>
                   <p className="text-xs text-muted-foreground">Premium Schemes</p>

@@ -748,6 +748,8 @@ export default function SettingsPage() {
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
+                      {/* TEMPORARILY DISABLED - Supabase Storage content-type bug */}
+                      {/* 
                       <label htmlFor="logo-upload">
                         <input
                           id="logo-upload"
@@ -767,6 +769,10 @@ export default function SettingsPage() {
                           {uploadingLogo ? 'Uploading...' : 'Upload Logo'}
                         </Button>
                       </label>
+                      */}
+                      <p className="text-sm text-muted-foreground">
+                        Logo upload temporarily disabled. Using business name initial instead.
+                      </p>
                       <span className="text-xs text-muted-foreground">Max 2MB, PNG/JPG/SVG</span>
                     </div>
                   </div>
