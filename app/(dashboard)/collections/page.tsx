@@ -239,6 +239,8 @@ export default function CollectionsPage() {
   async function loadEnrollments(customerId: string) {
     if (!profile?.retailer_id) return;
     try {
+      console.log('Loading enrollments for customer:', customerId);
+      
       // First get enrollments
       const { data: enrollmentsData, error: enrollError } = await supabase
         .from('enrollments')
@@ -247,10 +249,18 @@ export default function CollectionsPage() {
         .eq('customer_id', customerId)
         .eq('status', 'ACTIVE');
 
-      if (enrollError) throw enrollError;
+      if (enrollError) {
+        console.error('Error fetching enrollments:', enrollError);
+        toast.error(`Failed to load enrollments: ${enrollError.message}`);
+        throw enrollError;
+      }
+      
+      console.log('Enrollments data:', enrollmentsData);
       
       if (!enrollmentsData || enrollmentsData.length === 0) {
+        console.log('No active enrollments found for customer');
         setEnrollments([]);
+        toast.info('No active plans found for this customer. Please enroll them in a plan first.');
         return;
       }
 
@@ -295,9 +305,15 @@ export default function CollectionsPage() {
           setSelectedStore(enrollmentsList[0].store_id);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading enrollments:', error);
-      toast.error('Failed to load customer enrollments');
+      setEnrollments([]);
+      
+      if (error?.message?.includes('relation') || error?.code === '42P01') {
+        toast.error('Database table missing. Please run migration: 20260125_complete_enrollments_setup.sql');
+      } else {
+        toast.error(`Failed to load customer enrollments: ${error?.message || 'Unknown error'}`);
+      }
     }
   }
 

@@ -54,9 +54,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       {/* Mobile Navigation - Always visible on mobile */}
       <MobileNav />
 
-      <Toaster />
-    </div>
-      </div>
       <Toaster position="top-right" richColors />
     </div>
   );

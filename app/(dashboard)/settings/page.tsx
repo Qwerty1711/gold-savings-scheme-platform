@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/contexts/auth-context';
+import { useBranding } from '@/lib/contexts/branding-context';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Settings, Users, Lock, Bell, LogOut, Trash2, Plus, Store, TrendingUp, Edit } from 'lucide-react';
@@ -70,6 +71,7 @@ type RateHistory = {
 
 export default function SettingsPage() {
   const { profile, user } = useAuth();
+  const { refreshBranding } = useBranding();
   const router = useRouter();
   const [retailerSettings, setRetailerSettings] = useState<RetailerSettings | null>(null);
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
@@ -284,6 +286,9 @@ export default function SettingsPage() {
       
       // Update local state with saved data
       setRetailerSettings(data[0]);
+      // Refresh branding context to update header/logo
+      await refreshBranding();
+      
       
       toast.success('✅ Retailer information saved successfully!');
       
@@ -333,20 +338,20 @@ export default function SettingsPage() {
         throw new Error('Unable to access storage. Please contact support.');
       }
 
-      const bucketExists = buckets?.some(b => b.id === 'retailer-assets');
+      const bucketExists = buckets?.some(b => b.id === 'retailer-logos');
       
       if (!bucketExists) {
-        throw new Error('Storage bucket not configured. Please run the storage migration in Supabase SQL Editor first.');
+        throw new Error('Storage not configured. Please run the SQL migration: 20260126_setup_storage_for_logos.sql');
       }
 
       // Create a unique file name
       const fileExt = file.name.split('.').pop();
       const fileName = `${profile.retailer_id}-${Date.now()}.${fileExt}`;
-      const filePath = `logos/${fileName}`;
+      const filePath = `${profile.retailer_id}/${fileName}`;
 
       // Upload to Supabase Storage with content-type
       const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('retailer-assets')
+        .from('retailer-logos')
         .upload(filePath, file, {
           cacheControl: '3600',
           upsert: false,
@@ -360,7 +365,7 @@ export default function SettingsPage() {
 
       // Get public URL
       const { data: urlData } = supabase.storage
-        .from('retailer-assets')
+        .from('retailer-logos')
         .getPublicUrl(filePath);
 
       const logoUrl = urlData.publicUrl;
@@ -378,6 +383,9 @@ export default function SettingsPage() {
         setRetailerSettings({ ...retailerSettings, logo_url: logoUrl } as any);
       }
       setLogoPreview(logoUrl);
+
+      // Refresh branding context to update header/logo
+      await refreshBranding();
 
       toast.success('✅ Logo uploaded successfully!');
     } catch (error: any) {
