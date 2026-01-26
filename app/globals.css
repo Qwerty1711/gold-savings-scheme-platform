@@ -147,11 +147,12 @@
 
   /* Input placeholder styling */
   input::placeholder {
-    @apply text-gold-400/60;
+    color: rgba(251, 191, 36, 0.6);
   }
 
   input:focus {
-    @apply ring-2 ring-gold-400/30 border-gold-500;
+    @apply ring-2 border-gold-500;
+    ring-color: rgba(251, 191, 36, 0.3);
   }
 }
 
@@ -267,7 +268,12 @@
   /* ============ LUXURY CARD STYLES ============ */
   
   .luxury-card {
-    @apply rounded-2xl bg-gradient-to-br from-white via-gold-50/30 to-gold-100/40 border-2 border-gold-300/70;
+    @apply rounded-2xl border-2;
+    background: linear-gradient(135deg, 
+      rgba(255, 255, 255, 1) 0%,
+      rgba(254, 250, 240, 0.30) 50%,
+      rgba(255, 248, 220, 0.40) 100%);
+    border-color: rgba(253, 185, 49, 0.7);
     box-shadow:
       0 25px 70px -10px rgba(255, 215, 0, 0.25),
       0 0 0 1px rgba(255, 215, 0, 0.15) inset,
@@ -277,7 +283,11 @@
   }
 
   .dark .luxury-card {
-    @apply from-zinc-900/95 via-zinc-800/90 to-zinc-900/85 border-gold-400/40;
+    background: linear-gradient(135deg,
+      rgba(24, 24, 27, 0.95) 0%,
+      rgba(39, 39, 42, 0.90) 50%,
+      rgba(24, 24, 27, 0.85) 100%);
+    border-color: rgba(251, 191, 36, 0.4);
     box-shadow:
       0 25px 70px -10px rgba(255, 215, 0, 0.35),
       0 0 0 1px rgba(255, 215, 0, 0.25) inset,
@@ -285,7 +295,8 @@
   }
 
   .jewelry-showcase-card {
-    @apply rounded-3xl overflow-hidden border-2 border-gold-300/90;
+    @apply rounded-3xl overflow-hidden border-2;
+    border-color: rgba(252, 211, 77, 0.9);
     background: linear-gradient(135deg,
       rgba(255, 255, 255, 1) 0%,
       rgba(254, 250, 240, 0.95) 50%,
@@ -326,7 +337,12 @@
   }
 
   .jewel-card {
-    @apply rounded-3xl bg-gradient-to-br from-white via-gold-50/60 to-gold-100/70 border-2 border-gold-300/70;
+    @apply rounded-3xl border-2;
+    background: linear-gradient(135deg,
+      rgba(255, 255, 255, 1) 0%,
+      rgba(254, 250, 240, 0.60) 50%,
+      rgba(255, 248, 220, 0.70) 100%);
+    border-color: rgba(252, 211, 77, 0.7);
     box-shadow:
       0 15px 50px -10px rgba(255, 215, 0, 0.3),
       0 0 0 1px rgba(255, 215, 0, 0.2) inset,
@@ -335,7 +351,11 @@
   }
 
   .dark .jewel-card {
-    @apply from-zinc-900/95 via-zinc-800/90 to-zinc-900/85 border-gold-500/40;
+    background: linear-gradient(135deg,
+      rgba(24, 24, 27, 0.95) 0%,
+      rgba(39, 39, 42, 0.90) 50%,
+      rgba(24, 24, 27, 0.85) 100%);
+    border-color: rgba(234, 179, 8, 0.4);
     box-shadow:
       0 15px 50px -10px rgba(255, 215, 0, 0.4),
       0 0 0 1px rgba(255, 215, 0, 0.3) inset,
@@ -526,7 +546,8 @@
   /* ============ ICON DOCK ============ */
   
   .icon-dock {
-    @apply flex items-center gap-2 p-3 rounded-2xl border-2 border-gold-300/50;
+    @apply flex items-center gap-2 p-3 rounded-2xl border-2;
+    border-color: rgba(252, 211, 77, 0.5);
     background: linear-gradient(135deg,
       rgba(255, 255, 255, 0.95) 0%,
       rgba(255, 250, 240, 0.90) 100%);
@@ -546,22 +567,35 @@
   }
 
   .dock-icon {
-    @apply relative flex flex-col items-center justify-center gap-1 px-4 py-3 rounded-xl hover:bg-gold-100/60 dark:hover:bg-gold-900/30 cursor-pointer;
+    @apply relative flex flex-col items-center justify-center gap-1 px-4 py-3 rounded-xl cursor-pointer;
     transition: all 0.2s ease;
   }
 
   .dock-icon:hover {
+    background-color: rgba(254, 249, 195, 0.6);
     box-shadow: 
       0 4px 15px rgba(255, 215, 0, 0.2),
       inset 0 1px 2px rgba(255, 255, 255, 0.5);
     transform: translateY(-2px);
   }
 
+  .dark .dock-icon:hover {
+    background-color: rgba(113, 63, 18, 0.3);
+  }
+
   .dock-icon.active {
-    @apply bg-gradient-to-br from-gold-100 to-gold-200/80 dark:from-gold-900/40 dark:to-gold-800/30;
+    background: linear-gradient(135deg, 
+      rgba(254, 249, 195, 1) 0%,
+      rgba(254, 240, 138, 0.8) 100%);
     box-shadow: 
       0 4px 15px rgba(255, 215, 0, 0.3),
       inset 0 1px 2px rgba(255, 255, 255, 0.6);
+  }
+
+  .dark .dock-icon.active {
+    background: linear-gradient(135deg,
+      rgba(113, 63, 18, 0.4) 0%,
+      rgba(133, 77, 14, 0.3) 100%);
   }
 
   .dock-icon::after {
@@ -576,23 +610,48 @@
   /* ============ STATUS BADGES ============ */
   
   .status-active {
-    @apply bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400;
+    @apply bg-emerald-100 text-emerald-800;
+  }
+
+  .dark .status-active {
+    background-color: rgba(6, 78, 59, 0.3);
+    @apply text-emerald-400;
   }
 
   .status-due {
-    @apply bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400;
+    @apply bg-orange-100 text-orange-800;
+  }
+
+  .dark .status-due {
+    background-color: rgba(124, 45, 18, 0.3);
+    @apply text-orange-400;
   }
 
   .status-missed {
-    @apply bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400;
+    @apply bg-red-100 text-red-800;
+  }
+
+  .dark .status-missed {
+    background-color: rgba(127, 29, 29, 0.3);
+    @apply text-red-400;
   }
 
   .status-ready {
-    @apply bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400;
+    @apply bg-blue-100 text-blue-800;
+  }
+
+  .dark .status-ready {
+    background-color: rgba(30, 58, 138, 0.3);
+    @apply text-blue-400;
   }
 
   .status-paid {
-    @apply bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400;
+    @apply bg-emerald-100 text-emerald-800;
+  }
+
+  .dark .status-paid {
+    background-color: rgba(6, 78, 59, 0.3);
+    @apply text-emerald-400;
   }
 
   /* ============ ANIMATIONS ============ */
@@ -635,7 +694,11 @@
   }
 
   .skeleton {
-    @apply bg-gradient-to-r from-muted via-muted/50 to-muted rounded;
+    @apply rounded;
+    background: linear-gradient(90deg, 
+      hsl(var(--muted)) 0%, 
+      rgba(0, 0, 0, 0.05) 50%, 
+      hsl(var(--muted)) 100%);
   }
 
   /* Targeted transitions - only on interactive elements for better performance */
