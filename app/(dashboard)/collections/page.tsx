@@ -10,7 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/contexts/auth-context';
 import { toast } from 'sonner';
-import { TrendingUp, Plus } from 'lucide-react';
+import { TrendingUp, Plus, Coins, Search, Download, Calendar } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   Dialog,
   DialogContent,
@@ -84,6 +85,17 @@ export default function CollectionsPage() {
   const [loadingCustomers, setLoadingCustomers] = useState(true);
   const [transactions, setTransactions] = useState<Txn[]>([]);
   const [monthlyPaymentInfo, setMonthlyPaymentInfo] = useState<MonthlyPaymentInfo | null>(null);
+
+  // Transaction list state (for full transaction history section)
+  const [allTransactions, setAllTransactions] = useState<any[]>([]);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
+  const [txnTypeFilter, setTxnTypeFilter] = useState<'ALL' | 'COLLECTIONS' | 'REDEMPTIONS'>('ALL');
+  const [txnDateFilter, setTxnDateFilter] = useState<'DAY' | 'WEEK' | 'MONTH' | 'RANGE'>('MONTH');
+  const [txnSearchQuery, setTxnSearchQuery] = useState('');
+  const [txnStartDate, setTxnStartDate] = useState('');
+  const [txnEndDate, setTxnEndDate] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
 
   useEffect(() => {
     void loadStores();
@@ -445,6 +457,139 @@ export default function CollectionsPage() {
     }
   }
 
+  // Load all transactions with filters
+  async function loadAllTransactions() {
+    if (!profile?.retailer_id) return;
+    setTransactionsLoading(true);
+
+    try {
+      let startDate: string;
+      let endDate: string;
+
+      const now = new Date();
+      
+      if (txnDateFilter === 'DAY') {
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).toISOString();
+        endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0).toISOString();
+      } else if (txnDateFilter === 'WEEK') {
+        const day = now.getDay();
+        const diff = (day + 6) % 7; // Monday start
+        const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diff, 0, 0, 0);
+        startDate = monday.toISOString();
+        endDate = new Date(monday.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      } else if (txnDateFilter === 'MONTH') {
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0).toISOString();
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0).toISOString();
+      } else if (txnDateFilter === 'RANGE' && txnStartDate && txnEndDate) {
+        startDate = new Date(txnStartDate).toISOString();
+        endDate = new Date(new Date(txnEndDate).getTime() + 24 * 60 * 60 * 1000).toISOString();
+      } else {
+        // Default to this month
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0).toISOString();
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0).toISOString();
+      }
+
+      // Build query
+      let query = supabase
+        .from('transactions')
+        .select(`
+          id,
+          amount_paid,
+          payment_status,
+          mode,
+          txn_type,
+          paid_at,
+          grams_allocated_snapshot,
+          rate_per_gram_snapshot,
+          source,
+          enrollment_id,
+          customers (
+            id,
+            full_name,
+            phone
+          )
+        `)
+        .eq('retailer_id', profile.retailer_id)
+        .eq('payment_status', 'SUCCESS')
+        .gte('paid_at', startDate)
+        .lt('paid_at', endDate)
+        .order('paid_at', { ascending: false });
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      // Fetch enrollment data for each transaction
+      let enrichedData = data || [];
+      if (enrichedData.length > 0) {
+        const enrollmentIds = [...new Set(enrichedData.map(t => t.enrollment_id).filter(Boolean))];
+        
+        if (enrollmentIds.length > 0) {
+          const { data: enrollmentsData } = await supabase
+            .from('enrollments')
+            .select(`
+              id,
+              karat,
+              plan_id,
+              scheme_templates:plan_id (
+                name
+              )
+            `)
+            .in('id', enrollmentIds);
+
+          // Create a map for quick lookup
+          const enrollmentMap = new Map();
+          enrollmentsData?.forEach(enrollment => {
+            enrollmentMap.set(enrollment.id, enrollment);
+          });
+
+          // Enrich transactions with enrollment data
+          enrichedData = enrichedData.map(txn => ({
+            ...txn,
+            enrollments: txn.enrollment_id ? enrollmentMap.get(txn.enrollment_id) : null
+          }));
+        }
+      }
+
+      // Filter by transaction type if needed
+      let filteredData = enrichedData;
+      if (txnTypeFilter === 'COLLECTIONS') {
+        filteredData = filteredData.filter(t => t.txn_type === 'PRIMARY_INSTALLMENT' || t.txn_type === 'TOP_UP');
+      } else if (txnTypeFilter === 'REDEMPTIONS') {
+        // Add redemption filter when redemptions are tracked differently
+        // For now, we only have payment collections
+        filteredData = [];
+      }
+
+      // Filter by search query
+      if (txnSearchQuery.trim()) {
+        const query = txnSearchQuery.toLowerCase();
+        filteredData = filteredData.filter(t => {
+          const customer = t.customers as any;
+          return (
+            t.id.toLowerCase().includes(query) ||
+            customer?.full_name?.toLowerCase().includes(query) ||
+            customer?.phone?.includes(query)
+          );
+        });
+      }
+
+      setAllTransactions(filteredData);
+    } catch (error: any) {
+      console.error('Error loading transactions:', error);
+      toast.error('Failed to load transactions');
+    } finally {
+      setTransactionsLoading(false);
+    }
+  }
+
+  // Load all transactions when filters change
+  useEffect(() => {
+    if (profile?.retailer_id) {
+      void loadAllTransactions();
+    }
+  }, [profile?.retailer_id, txnDateFilter, txnTypeFilter, txnSearchQuery, txnStartDate, txnEndDate]);
+
   return (
     <div className="space-y-6 pb-32">
       <div className="space-y-2">
@@ -671,6 +816,254 @@ export default function CollectionsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* All Transactions List Section */}
+      <Card className="glass-card border-2 border-primary/20">
+        <CardHeader>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Coins className="w-5 h-5 text-gold-600" />
+                Transactions
+              </CardTitle>
+              <CardDescription>Complete transaction history with filters</CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className="gap-2">
+                <Download className="w-4 h-4" />
+                Export
+              </Button>
+            </div>
+          </div>
+
+          {/* Filters */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search customer name, ID, mobile..."
+                value={txnSearchQuery}
+                onChange={(e) => {
+                  setTxnSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="pl-9"
+              />
+            </div>
+
+            {/* Transaction Type Filter */}
+            <Select
+              value={txnTypeFilter}
+              onValueChange={(v: 'ALL' | 'COLLECTIONS' | 'REDEMPTIONS') => {
+                setTxnTypeFilter(v);
+                setCurrentPage(1);
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Transaction Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Transactions</SelectItem>
+                <SelectItem value="COLLECTIONS">Payment Collections</SelectItem>
+                <SelectItem value="REDEMPTIONS">Redemptions</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Date Filter */}
+            <Select
+              value={txnDateFilter}
+              onValueChange={(v: 'DAY' | 'WEEK' | 'MONTH' | 'RANGE') => {
+                setTxnDateFilter(v);
+                setCurrentPage(1);
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Date Range" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="DAY">Today</SelectItem>
+                <SelectItem value="WEEK">This Week</SelectItem>
+                <SelectItem value="MONTH">This Month</SelectItem>
+                <SelectItem value="RANGE">Custom Range</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Date Range Inputs (visible only when RANGE is selected) */}
+            {txnDateFilter === 'RANGE' && (
+              <>
+                <Input
+                  type="date"
+                  value={txnStartDate}
+                  onChange={(e) => setTxnStartDate(e.target.value)}
+                  className="w-full"
+                />
+                <Input
+                  type="date"
+                  value={txnEndDate}
+                  onChange={(e) => setTxnEndDate(e.target.value)}
+                  className="w-full"
+                />
+              </>
+            )}
+
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Calendar className="w-4 h-4" />
+              {allTransactions.length} transaction{allTransactions.length !== 1 ? 's' : ''}
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent>
+          {transactionsLoading ? (
+            <div className="py-12 text-center">
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent"></div>
+              <p className="mt-4 text-muted-foreground">Loading transactions...</p>
+            </div>
+          ) : allTransactions.length === 0 ? (
+            <div className="py-12 text-center">
+              <Coins className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-50" />
+              <p className="text-muted-foreground">No transactions found for the selected filters</p>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Customer Name</TableHead>
+                      <TableHead>Transaction ID</TableHead>
+                      <TableHead className="text-right">Monthly Amount</TableHead>
+                      <TableHead>Paid Date</TableHead>
+                      <TableHead>Mode of Payment</TableHead>
+                      <TableHead className="text-right">Gold Accumulated</TableHead>
+                      <TableHead className="text-right">Gold Rate During Purchase</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {allTransactions
+                      .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+                      .map((txn) => {
+                        const customer = txn.customers as any;
+                        const enrollment = txn.enrollments as any;
+                        const plan = enrollment?.scheme_templates as any;
+                        
+                        return (
+                          <TableRow key={txn.id}>
+                            <TableCell>
+                              <div>
+                                <div className="font-medium">{customer?.full_name || 'N/A'}</div>
+                                <div className="text-xs text-muted-foreground">{customer?.phone}</div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <code className="text-xs bg-muted px-2 py-1 rounded">
+                                {txn.id.slice(0, 8)}
+                              </code>
+                            </TableCell>
+                            <TableCell className="text-right font-semibold">
+                              ₹{(txn.amount_paid || 0).toLocaleString()}
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-sm">
+                                {new Date(txn.paid_at).toLocaleDateString('en-IN', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric',
+                                })}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{txn.mode || 'CASH'}</Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <span className="font-semibold gold-text">
+                                {(txn.grams_allocated_snapshot || 0).toFixed(4)}g
+                              </span>
+                              <div className="text-xs text-muted-foreground">
+                                {enrollment?.karat || 'N/A'}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <span className="font-medium">
+                                ₹{(txn.rate_per_gram_snapshot || 0).toLocaleString()}
+                              </span>
+                              <div className="text-xs text-muted-foreground">/gram</div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Pagination */}
+              {allTransactions.length > itemsPerPage && (
+                <div className="flex items-center justify-between mt-4">
+                  <p className="text-sm text-muted-foreground">
+                    Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, allTransactions.length)} of {allTransactions.length} transactions
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      Previous
+                    </Button>
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: Math.ceil(allTransactions.length / itemsPerPage) }, (_, i) => i + 1)
+                        .filter(page => {
+                          // Show first, last, current, and adjacent pages
+                          return page === 1 ||
+                            page === Math.ceil(allTransactions.length / itemsPerPage) ||
+                            Math.abs(page - currentPage) <= 1;
+                        })
+                        .map((page, idx, arr) => {
+                          // Add ellipsis
+                          if (idx > 0 && page - arr[idx - 1] > 1) {
+                            return [
+                              <span key={`ellipsis-${page}`} className="px-2 text-muted-foreground">...</span>,
+                              <Button
+                                key={page}
+                                variant={currentPage === page ? 'default' : 'outline'}
+                                size="sm"
+                                onClick={() => setCurrentPage(page)}
+                                className="w-9"
+                              >
+                                {page}
+                              </Button>
+                            ];
+                          }
+                          return (
+                            <Button
+                              key={page}
+                              variant={currentPage === page ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => setCurrentPage(page)}
+                              className="w-9"
+                            >
+                              {page}
+                            </Button>
+                          );
+                        })}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.min(Math.ceil(allTransactions.length / itemsPerPage), p + 1))}
+                      disabled={currentPage >= Math.ceil(allTransactions.length / itemsPerPage)}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
