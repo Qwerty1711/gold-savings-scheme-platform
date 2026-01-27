@@ -24,35 +24,51 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verify OTP using registration_otps table
-    const { data: otpRecord, error: otpError } = await supabaseAdmin
-      .from('registration_otps')
-      .select('*')
-      .eq('phone', phone)
-      .eq('otp_code', otp)
-      .eq('verified', false)
-      .gte('expires_at', new Date().toISOString())
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // Demo mode: Accept OTP 123456 for any phone number in development
+    const isDemoOTP = otp === '123456';
+    const isDevelopment = process.env.NODE_ENV === 'development';
 
-    if (otpError || !otpRecord) {
+    let otpValid = false;
+
+    if (isDevelopment && isDemoOTP) {
+      // Demo mode: Always accept 123456
+      otpValid = true;
+    } else {
+      // Verify OTP using registration_otps table
+      const { data: otpRecord, error: otpError } = await supabaseAdmin
+        .from('registration_otps')
+        .select('*')
+        .eq('phone', phone)
+        .eq('otp_code', otp)
+        .gte('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!otpError && otpRecord) {
+        otpValid = true;
+        
+        // Mark OTP as verified if not already
+        if (!otpRecord.verified) {
+          await supabaseAdmin
+            .from('registration_otps')
+            .update({ verified: true })
+            .eq('id', otpRecord.id);
+        }
+      }
+    }
+
+    if (!otpValid) {
       return NextResponse.json(
         { error: 'Invalid or expired OTP' },
         { status: 400 }
       );
     }
 
-    // Mark OTP as verified
-    await supabaseAdmin
-      .from('registration_otps')
-      .update({ verified: true })
-      .eq('id', otpRecord.id);
-
     // Get customer by phone
     const { data: customer, error: customerError } = await supabaseAdmin
       .from('customers')
-      .select('id')
+      .select('id, user_id')
       .eq('phone', phone)
       .maybeSingle();
 
@@ -63,43 +79,27 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get user_profile to find auth user ID
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from('user_profiles')
-      .select('id, customer_id')
-      .eq('customer_id', customer.id)
-      .eq('role', 'CUSTOMER')
-      .maybeSingle();
+    // Get the auth user associated with this customer
+    const { data: authUser, error: authUserError } = await supabaseAdmin.auth.admin.getUserById(
+      customer.user_id
+    );
 
-    if (profileError || !profile) {
+    if (authUserError || !authUser) {
       return NextResponse.json(
-        { error: 'User profile not found' },
+        { error: 'Authentication user not found. Please contact support.' },
         { status: 404 }
       );
     }
 
-    // Generate a session for the user
-    const { data: sessionData, error: sessionError } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'magiclink',
-      email: `${phone.replace(/\+/g, '')}@customer.goldsaver.com`,
+    // Create a session for this user using admin API
+    const { data: sessionData, error: sessionError } = await supabaseAdmin.auth.admin.createSession({
+      user_id: authUser.user.id,
     });
 
     if (sessionError || !sessionData) {
+      console.error('Session creation error:', sessionError);
       return NextResponse.json(
-        { error: 'Failed to create session' },
-        { status: 500 }
-      );
-    }
-
-    // Extract access and refresh tokens from the magic link
-    const url = new URL(sessionData.properties.action_link);
-    const hashParams = new URLSearchParams(url.hash.substring(1));
-    const accessToken = hashParams.get('access_token');
-    const refreshToken = hashParams.get('refresh_token');
-
-    if (!accessToken || !refreshToken) {
-      return NextResponse.json(
-        { error: 'Failed to generate session tokens' },
+        { error: 'Failed to create session: ' + (sessionError?.message || 'Unknown error') },
         { status: 500 }
       );
     }
@@ -107,8 +107,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       session: {
-        access_token: accessToken,
-        refresh_token: refreshToken,
+        access_token: sessionData.session.access_token,
+        refresh_token: sessionData.session.refresh_token,
       },
     });
   } catch (error: any) {
