@@ -4,7 +4,6 @@
  */
 
 import { useAuth } from '@/lib/contexts/auth-context';
-import { useCustomerAuth } from '@/lib/contexts/customer-auth-context';
 import {
   hasPermission,
   canAccessRoute,
@@ -39,18 +38,17 @@ export interface UsePermissionsReturn {
 /**
  * Hook to access user permissions and role-based utilities
  * Works for both staff/admin (via AuthContext) and customers (via CustomerAuthContext)
+ * 
+ * Note: For customer-specific features, use useCustomerAuth directly in customer routes.
+ * This hook is primarily for staff/admin RBAC.
  */
 export function usePermissions(): UsePermissionsReturn {
-  // Try staff/admin auth first
-  const staffAuth = useAuth();
+  // Use staff/admin auth context
+  const { user, profile } = useAuth();
   
-  // Try customer auth if staff auth not available
-  const customerAuth = useCustomerAuth();
-  
-  // Determine which auth to use
-  const role = staffAuth?.profile?.role || (customerAuth?.customer ? 'CUSTOMER' : undefined);
-  const userId = staffAuth?.user?.id || customerAuth?.user?.id;
-  const customerId = customerAuth?.customer?.id;
+  // Get role from profile
+  const role = profile?.role as UserRole | undefined;
+  const customerId = undefined; // Staff/admin don't have customer_id
   
   return {
     role,
