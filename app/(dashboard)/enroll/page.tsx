@@ -94,6 +94,9 @@ export default function EnrollmentWizard() {
 
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerName, setCustomerName] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [customerAddress, setCustomerAddress] = useState('');
+  const [customerPan, setCustomerPan] = useState('');
   const [source, setSource] = useState('WALK_IN');
   const [existingCustomer, setExistingCustomer] = useState<any>(null);
 
@@ -359,9 +362,10 @@ export default function EnrollmentWizard() {
                 full_name: customerName,
                 customer_code: `CUST${Date.now()}`,
                 store_id: selectedStore,
-                email: null, // Explicitly set optional fields
-                address: null,
-                kyc_status: 'PENDING',
+                email: customerEmail || null,
+                address: customerAddress || null,
+                pan_number: customerPan || null,
+                kyc_status: customerPan ? 'VERIFIED' : 'PENDING',
               })
               .select()
               .single();
@@ -591,7 +595,7 @@ export default function EnrollmentWizard() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
+              <Label htmlFor="name">Full Name *</Label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
@@ -601,8 +605,45 @@ export default function EnrollmentWizard() {
                   onChange={(e) => setCustomerName(e.target.value)}
                   className="pl-10"
                   disabled={!!existingCustomer}
+                  required
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="email">Email Address</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="customer@example.com (optional)"
+                value={customerEmail}
+                onChange={(e) => setCustomerEmail(e.target.value)}
+                disabled={!!existingCustomer}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="address">Address</Label>
+              <Input
+                id="address"
+                placeholder="Full address (optional)"
+                value={customerAddress}
+                onChange={(e) => setCustomerAddress(e.target.value)}
+                disabled={!!existingCustomer}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="pan">PAN Number</Label>
+              <Input
+                id="pan"
+                placeholder="AAAAA9999A (optional)"
+                value={customerPan}
+                onChange={(e) => setCustomerPan(e.target.value.toUpperCase())}
+                maxLength={10}
+                disabled={!!existingCustomer}
+              />
+              <p className="text-xs text-muted-foreground">Required for high-value transactions</p>
             </div>
 
             <div className="space-y-2">

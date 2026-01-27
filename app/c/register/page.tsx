@@ -16,13 +16,10 @@ export default function CustomerRegistrationPage() {
   const { toast } = useToast();
   
   // Form steps
-  const [step, setStep] = useState<'details' | 'otp' | 'complete'>('details');
+  const [step, setStep] = useState<'details' | 'otp'>('details');
   
   // Form data
   const [phone, setPhone] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [address, setAddress] = useState('');
-  const [panNumber, setPanNumber] = useState('');
   
   // OTP data
   const [otp, setOtp] = useState('');
@@ -34,7 +31,6 @@ export default function CustomerRegistrationPage() {
   // Loading states
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
-  const [isCompleting, setIsCompleting] = useState(false);
   
   // Timer for OTP expiry
   useEffect(() => {
@@ -119,7 +115,7 @@ export default function CustomerRegistrationPage() {
     await handleSendOtp();
   };
   
-  // Verify OTP
+  // Verify OTP and redirect to enrollment
   const handleVerifyOtp = async () => {
     if (otp.length !== 6) {
       toast({
@@ -146,11 +142,17 @@ export default function CustomerRegistrationPage() {
       }
       
       toast({
-        title: 'OTP Verified',
-        description: 'Please complete your registration',
+        title: 'OTP Verified!',
+        description: 'Redirecting to enrollment page...',
       });
       
-      setStep('complete');
+      // Store phone number in session storage for enrollment page
+      sessionStorage.setItem('verified_phone', phone);
+      
+      // Redirect to enrollment page
+      setTimeout(() => {
+        router.push('/c/enroll');
+      }, 1000);
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -159,61 +161,6 @@ export default function CustomerRegistrationPage() {
       });
     } finally {
       setIsVerifying(false);
-    }
-  };
-  
-  // Complete registration
-  const handleCompleteRegistration = async () => {
-    if (!fullName) {
-      toast({
-        title: 'Error',
-        description: 'Please enter your full name',
-        variant: 'destructive',
-      });
-      return;
-    }
-    
-    setIsCompleting(true);
-    
-    try {
-      // For now, use a default retailer ID - in production, this should come from URL param or config
-      const retailerId = '00000000-0000-0000-0000-000000000001'; // Replace with actual retailer ID
-      
-      const response = await fetch('/api/auth/complete-registration', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone,
-          full_name: fullName,
-          address,
-          pan_number: panNumber,
-          retailer_id: retailerId,
-        }),
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Registration failed');
-      }
-      
-      toast({
-        title: 'Registration Complete!',
-        description: 'Redirecting to enrollment page...',
-      });
-      
-      // Redirect to enrollment page
-      setTimeout(() => {
-        router.push('/c/enroll');
-      }, 1500);
-    } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setIsCompleting(false);
     }
   };
   
@@ -234,7 +181,6 @@ export default function CustomerRegistrationPage() {
           <CardDescription className="text-center">
             {step === 'details' && 'Enter your phone number to get started'}
             {step === 'otp' && 'Enter the OTP sent to your phone'}
-            {step === 'complete' && 'Complete your registration details'}
           </CardDescription>
         </CardHeader>
         
@@ -362,76 +308,6 @@ export default function CustomerRegistrationPage() {
                   </>
                 ) : (
                   'Resend OTP'
-                )}
-              </Button>
-            </>
-          )}
-          
-          {/* Step 3: Complete Registration */}
-          {step === 'complete' && (
-            <>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="fullName">Full Name *</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="fullName"
-                      type="text"
-                      placeholder="Enter your full name"
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="address">Address</Label>
-                  <div className="relative">
-                    <MapPin className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <Textarea
-                      id="address"
-                      placeholder="Enter your complete address"
-                      value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                      className="pl-10 min-h-[80px]"
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="panNumber">PAN Number</Label>
-                  <div className="relative">
-                    <CreditCard className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="panNumber"
-                      type="text"
-                      placeholder="ABCDE1234F"
-                      value={panNumber}
-                      onChange={(e) => setPanNumber(e.target.value.toUpperCase())}
-                      className="pl-10"
-                      maxLength={10}
-                    />
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    Optional - Required for high-value transactions
-                  </p>
-                </div>
-              </div>
-              
-              <Button
-                onClick={handleCompleteRegistration}
-                disabled={isCompleting || !fullName}
-                className="w-full bg-gradient-to-r from-gold-600 to-gold-700 hover:from-gold-700 hover:to-gold-800"
-              >
-                {isCompleting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Completing Registration...
-                  </>
-                ) : (
-                  'Complete Registration'
                 )}
               </Button>
             </>
