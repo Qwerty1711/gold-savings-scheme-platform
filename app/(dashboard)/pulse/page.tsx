@@ -105,7 +105,7 @@ export default function PulseDashboard() {
   const [updateRateDialog, setUpdateRateDialog] = useState(false);
   const [newRate, setNewRate] = useState('');
   const [selectedKarat, setSelectedKarat] = useState<'18K' | '22K' | '24K' | 'SILVER'>('22K');
-  const [timeFilter, setTimeFilter] = useState<'DAY' | 'WEEK' | 'MONTH' | 'YEAR' | 'RANGE'>('DAY');
+  const [timeFilter, setTimeFilter] = useState<'DAY' | 'WEEK' | 'MONTH' | 'YEAR' | 'RANGE'>('MONTH'); // Changed from 'DAY' to 'MONTH' to show more data by default
   const [customStart, setCustomStart] = useState<string>('');
   const [customEnd, setCustomEnd] = useState<string>('');
   
