@@ -65,44 +65,38 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get customer by phone
-    const { data: customer, error: customerError } = await supabaseAdmin
-      .from('customers')
-      .select('id, full_name')
-      .eq('phone', phone)
-      .maybeSingle();
-
-    if (customerError || !customer) {
+    // OTP already verified above. Now create a session for the phone number.
+    // Find the auth user by phone
+    const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+    
+    if (listError) {
+      console.error('Error listing users:', listError);
       return NextResponse.json(
-        { error: 'Customer not found. Please register first.' },
+        { error: 'Failed to find user account' },
+        { status: 500 }
+      );
+    }
+
+    const authUser = users.find(u => u.phone === phone);
+
+    if (!authUser) {
+      return NextResponse.json(
+        { error: 'No account found for this phone number. Please register first.' },
         { status: 404 }
       );
     }
 
-    // Get user_profile to find the auth user ID linked to this customer
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from('user_profiles')
-      .select('id, role')
-      .eq('customer_id', customer.id)
-      .eq('role', 'CUSTOMER')
-      .maybeSingle();
-
-    if (profileError || !profile) {
-      return NextResponse.json(
-        { error: 'User profile not found. Please complete registration or contact support.' },
-        { status: 404 }
-      );
-    }
-
-    // Create a session for this user using the profile.id (which is the auth user ID)
-    const { data: sessionData, error: sessionError } = await supabaseAdmin.auth.admin.createSession({
-      user_id: profile.id,
+    // Generate auth tokens using signInWithOtp - create a verified session
+    // Since we already verified the OTP, we'll use a workaround: update the user to create tokens
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'magiclink',
+      phone: phone,
     });
 
-    if (sessionError || !sessionData) {
-      console.error('Session creation error:', sessionError);
+    if (linkError || !linkData?.properties) {
+      console.error('Link generation error:', linkError);
       return NextResponse.json(
-        { error: 'Failed to create session: ' + (sessionError?.message || 'Unknown error') },
+        { error: 'Failed to create session' },
         { status: 500 }
       );
     }
@@ -110,8 +104,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       session: {
-        access_token: sessionData.session.access_token,
-        refresh_token: sessionData.session.refresh_token,
+        access_token: linkData.properties.access_token,
+        refresh_token: linkData.properties.refresh_token,
       },
     });
   } catch (error: any) {

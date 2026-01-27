@@ -48,15 +48,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create auth user for customer
-    // Use phone as email (phone@customer.goldsaver.com)
-    const customerEmail = `${phone.replace(/\+/g, '')}@customer.goldsaver.com`;
-    
-    // Create Supabase auth user
+    // Create Supabase auth user with PHONE only (no email required)
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: customerEmail,
-      password: `${phone}${full_name}`,  // Temporary password, customer can change later
-      email_confirm: true,  // Auto-confirm email
+      phone: phone,
+      phone_confirm: true,  // Auto-confirm phone
       user_metadata: {
         full_name,
         phone,
@@ -97,7 +92,6 @@ export async function POST(request: Request) {
       message: data.message,
       customer_id: data.customer_id,
       registration_id: data.registration_id,
-      email: customerEmail,
     });
   } catch (error) {
     console.error('Error in complete-registration API:', error);
