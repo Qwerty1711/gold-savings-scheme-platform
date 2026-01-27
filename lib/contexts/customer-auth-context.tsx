@@ -149,44 +149,6 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
     </CustomerAuthContext.Provider>
   );
 }
-          .select('id, retailer_id, full_name, phone, email')
-          .eq('phone', phone)
-          .maybeSingle();
-
-        if (customerData) {
-          // Link customer to auth user if not already linked
-          if (!customerData.user_id) {
-            await supabase
-              .from('customers')
-              .update({ user_id: data.user.id })
-              .eq('id', customerData.id);
-          }
-
-          router.push('/c/schemes');
-        } else {
-          // New customer - redirect to registration
-          router.push('/c/register');
-        }
-      }
-
-      return { success: true };
-      */
-    } catch (error: any) {
-      return { success: false, error: error.message || 'Failed to verify OTP' };
-    }
-  };
-
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    router.push('/c/login');
-  };
-
-  return (
-    <CustomerAuthContext.Provider value={{ user, customer, loading, sendOTP, verifyOTP, signOut }}>
-      {children}
-    </CustomerAuthContext.Provider>
-  );
-}
 
 export function useCustomerAuth() {
   const context = useContext(CustomerAuthContext);
