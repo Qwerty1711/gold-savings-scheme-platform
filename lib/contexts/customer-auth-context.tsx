@@ -36,13 +36,23 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
       setUser(session?.user ?? null);
 
       if (session?.user) {
-        const { data } = await supabase
-          .from('customers')
-          .select('id, retailer_id, full_name, phone, email')
-          .eq('user_id', session.user.id)
+        // Get customer via user_profiles link
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('customer_id')
+          .eq('id', session.user.id)
+          .eq('role', 'CUSTOMER')
           .maybeSingle();
 
-        setCustomer(data);
+        if (profile?.customer_id) {
+          const { data: customerData } = await supabase
+            .from('customers')
+            .select('id, retailer_id, full_name, phone, email')
+            .eq('id', profile.customer_id)
+            .maybeSingle();
+
+          setCustomer(customerData);
+        }
       }
 
       setLoading(false);
