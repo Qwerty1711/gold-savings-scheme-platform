@@ -8,22 +8,29 @@ import { useAuth } from '@/lib/contexts/auth-context';
 import { useBranding } from '@/lib/contexts/branding-context';
 import { AnimatedLogo } from '@/components/ui/animated-logo';
 import { Button } from '@/components/ui/button';
+import { usePermissions } from '@/lib/hooks/use-permissions';
 
-const navItems = [
-  { name: 'Pulse', href: '/pulse', icon: Activity, description: 'Business Health' },
-  { name: 'Customers', href: '/customers', icon: UserCircle, description: 'Customer Management' },
-  { name: 'Plans', href: '/plans', icon: Sparkles, description: 'Scheme Templates' },
-  { name: 'Collections', href: '/collections', icon: Users, description: 'Payment Collection' },
-  { name: 'Redemptions', href: '/redemptions', icon: Award, description: 'Withdrawals' },
-  { name: 'Dues', href: '/pulse', icon: AlertCircle, description: 'Overdue Payments' },
-  { name: 'Growth', href: '/pulse', icon: TrendingUp, description: 'Staff Performance' },
-  { name: 'Settings', href: '/settings', icon: Gem, description: 'Configuration' },
+const allNavItems = [
+  { name: 'Pulse', href: '/pulse', icon: Activity, description: 'Business Health', roles: ['ADMIN', 'STAFF', 'CUSTOMER'] },
+  { name: 'Customers', href: '/customers', icon: UserCircle, description: 'Customer Management', roles: ['ADMIN', 'STAFF'] },
+  { name: 'Plans', href: '/plans', icon: Sparkles, description: 'Scheme Templates', roles: ['ADMIN', 'STAFF'] },
+  { name: 'Collections', href: '/collections', icon: Users, description: 'Payment Collection', roles: ['ADMIN', 'STAFF', 'CUSTOMER'] },
+  { name: 'Redemptions', href: '/redemptions', icon: Award, description: 'Withdrawals', roles: ['ADMIN', 'STAFF', 'CUSTOMER'] },
+  { name: 'Dues', href: '/pulse', icon: AlertCircle, description: 'Overdue Payments', roles: ['ADMIN', 'STAFF', 'CUSTOMER'] },
+  { name: 'Growth', href: '/pulse', icon: TrendingUp, description: 'Staff Performance', roles: ['ADMIN'] },
+  { name: 'Settings', href: '/settings', icon: Gem, description: 'Configuration', roles: ['ADMIN', 'STAFF'] },
 ];
 
 export function DesktopSidebar() {
   const pathname = usePathname();
   const { profile, signOut } = useAuth();
   const { branding } = useBranding();
+  const { role } = usePermissions();
+
+  // Filter navigation items based on user role
+  const navItems = allNavItems.filter((item) => 
+    role && item.roles.includes(role)
+  );
 
   return (
     <aside className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-64 bg-card border-r border-border">

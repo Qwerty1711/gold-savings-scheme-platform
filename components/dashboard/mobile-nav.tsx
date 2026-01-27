@@ -4,19 +4,26 @@ import { Activity, Users, Sparkles, TrendingUp, AlertCircle, UserCircle, Award }
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { usePermissions } from '@/lib/hooks/use-permissions';
 
-const navItems = [
-  { name: 'PULSE', href: '/pulse', icon: Activity },
-  { name: 'CUSTOMERS', href: '/customers', icon: UserCircle },
-  { name: 'PLANS', href: '/plans', icon: Sparkles },
-  { name: 'COLLECT', href: '/collections', icon: Users },
-  { name: 'REDEEM', href: '/redemptions', icon: Award },
-  { name: 'DUES', href: '/pulse', icon: AlertCircle },
-  { name: 'GROWTH', href: '/pulse', icon: TrendingUp },
+const allNavItems = [
+  { name: 'PULSE', href: '/pulse', icon: Activity, roles: ['ADMIN', 'STAFF', 'CUSTOMER'] },
+  { name: 'CUSTOMERS', href: '/customers', icon: UserCircle, roles: ['ADMIN', 'STAFF'] },
+  { name: 'PLANS', href: '/plans', icon: Sparkles, roles: ['ADMIN', 'STAFF'] },
+  { name: 'COLLECT', href: '/collections', icon: Users, roles: ['ADMIN', 'STAFF', 'CUSTOMER'] },
+  { name: 'REDEEM', href: '/redemptions', icon: Award, roles: ['ADMIN', 'STAFF', 'CUSTOMER'] },
+  { name: 'DUES', href: '/pulse', icon: AlertCircle, roles: ['ADMIN', 'STAFF', 'CUSTOMER'] },
+  { name: 'GROWTH', href: '/pulse', icon: TrendingUp, roles: ['ADMIN'] },
 ];
 
 export function MobileNav() {
   const pathname = usePathname();
+  const { role } = usePermissions();
+
+  // Filter navigation items based on user role
+  const navItems = allNavItems.filter((item) => 
+    role && item.roles.includes(role)
+  );
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 backdrop-blur-lg md:hidden shadow-luxury">

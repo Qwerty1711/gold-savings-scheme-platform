@@ -113,6 +113,13 @@ export default function CustomerLoginPage() {
                 >
                   {loading ? 'Sending...' : 'Send OTP'}
                 </Button>
+                
+                <div className="text-center text-sm text-gray-600">
+                  New customer?{' '}
+                  <a href="/c/register" className="text-gold-600 hover:text-gold-700 font-medium underline">
+                    Register here
+                  </a>
+                </div>
               </form>
             ) : (
               <form onSubmit={handleVerifyOTP} className="space-y-4">
