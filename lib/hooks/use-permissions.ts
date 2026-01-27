@@ -48,6 +48,7 @@ export function usePermissions(): UsePermissionsReturn {
   
   // Get role from profile
   const role = profile?.role as UserRole | undefined;
+  const userId = user?.id;
   const customerId = undefined; // Staff/admin don't have customer_id
   
   return {
