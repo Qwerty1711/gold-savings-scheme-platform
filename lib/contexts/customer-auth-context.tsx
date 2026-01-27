@@ -83,77 +83,72 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
 
   const sendOTP = async (phone: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      // NOTE: Supabase Phone OTP integration point
-      // In production, this would call:
-      // const { error } = await supabase.auth.signInWithOtp({ phone });
-
-      // For now, we'll use a stub that simulates the flow
-      console.log('📱 [STUB] Would send OTP to:', phone);
-      console.log('📱 [STUB] In production, use: supabase.auth.signInWithOtp({ phone })');
-
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // For demo purposes, accept any phone number
-      return { success: true };
-
-      /* PRODUCTION CODE (uncomment when phone auth is configured):
-      const { error } = await supabase.auth.signInWithOtp({
-        phone: phone,
-        options: {
-          channel: 'sms',
-        }
+      // Send OTP via our API (reuses registration OTP system)
+      const response = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
       });
 
-      if (error) {
-        return { success: false, error: error.message };
+      const data = await response.json();
+
+      if (!response.ok) {
+        return { success: false, error: data.error || 'Failed to send OTP' };
       }
 
+      console.log('Development OTP:', data.otp);
       return { success: true };
-      */
     } catch (error: any) {
-      return { success: false, error: error.message || 'Failed to send OTP' };
+      return { success: false, error: error.message };
     }
   };
 
-  const verifyOTP = async (phone: string, otp: string): Promise<{ success: boolean; error?: string }> => {
+  const verifyOTP = async (phone: string, token: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      // NOTE: Supabase Phone OTP verification point
-      // In production, this would call:
-      // const { error } = await supabase.auth.verifyOtp({ phone, token: otp, type: 'sms' });
-
-      console.log('📱 [STUB] Would verify OTP:', otp, 'for phone:', phone);
-      console.log('📱 [STUB] In production, use: supabase.auth.verifyOtp({ phone, token, type: "sms" })');
-
-      // For demo, accept "123456" as valid OTP
-      if (otp === '123456') {
-        // Simulate successful auth by creating a demo session
-        // In production, Supabase handles this automatically
-        console.log('📱 [STUB] OTP verified! In production, Supabase would create the session');
-
-        // For demo purposes, show that we'd be authenticated
-        // In real implementation, Supabase auth.verifyOtp creates the session automatically
-        router.push('/c/schemes');
-        return { success: true };
-      } else {
-        return { success: false, error: 'Invalid OTP. Use 123456 for demo' };
-      }
-
-      /* PRODUCTION CODE (uncomment when phone auth is configured):
-      const { data, error } = await supabase.auth.verifyOtp({
-        phone: phone,
-        token: otp,
-        type: 'sms'
+      // Verify OTP and get session tokens
+      const otpResponse = await fetch('/api/auth/customer-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, otp: token }),
       });
 
-      if (error) {
-        return { success: false, error: error.message };
+      const otpData = await otpResponse.json();
+
+      if (!otpResponse.ok) {
+        return { success: false, error: otpData.error || 'Invalid OTP' };
       }
 
-      // After successful OTP verification, load customer profile
-      if (data.user) {
-        const { data: customerData } = await supabase
-          .from('customers')
+      // Set the session from the response
+      if (otpData.session) {
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: otpData.session.access_token,
+          refresh_token: otpData.session.refresh_token,
+        });
+
+        if (sessionError) {
+          return { success: false, error: sessionError.message };
+        }
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  };
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setCustomer(null);
+    router.push('/c/login');
+  };
+
+  return (
+    <CustomerAuthContext.Provider value={{ user, customer, loading, sendOTP, verifyOTP, signOut }}>
+      {children}
+    </CustomerAuthContext.Provider>
+  );
+}
           .select('id, retailer_id, full_name, phone, email')
           .eq('phone', phone)
           .maybeSingle();
