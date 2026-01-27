@@ -26,7 +26,7 @@ type Plan = {
 export default function CustomerEnrollmentPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { customer } = useCustomerAuth();
+  const { customer, loading: authLoading } = useCustomerAuth();
   
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<string>('');
@@ -38,10 +38,24 @@ export default function CustomerEnrollmentPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isEnrolling, setIsEnrolling] = useState(false);
   
+  // Redirect to login if not authenticated after loading
+  useEffect(() => {
+    if (!authLoading && !customer) {
+      toast({
+        title: 'Authentication Required',
+        description: 'Please login to continue enrollment',
+        variant: 'destructive',
+      });
+      router.push('/c/login');
+    }
+  }, [authLoading, customer, router, toast]);
+  
   // Load available plans
   useEffect(() => {
-    loadPlans();
-  }, []);
+    if (customer?.retailer_id) {
+      loadPlans();
+    }
+  }, [customer?.retailer_id]);
   
   async function loadPlans() {
     if (!customer?.retailer_id) {
@@ -206,12 +220,21 @@ export default function CustomerEnrollmentPage() {
     }
   }
   
-  if (isLoading) {
+  // Show loading while auth is initializing
+  if (authLoading || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gold-50 via-white to-gold-100">
-        <Loader2 className="h-8 w-8 animate-spin text-gold-600" />
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin text-gold-600 mx-auto" />
+          <p className="text-gray-600">Loading your enrollment options...</p>
+        </div>
       </div>
     );
+  }
+  
+  // Don't render if customer not loaded
+  if (!customer) {
+    return null;
   }
   
   return (
