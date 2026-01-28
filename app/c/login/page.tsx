@@ -31,10 +31,8 @@ export default function CustomerLoginPage() {
       if (!result.success) {
         setError(result.error || 'Invalid phone number or PIN');
         setLoading(false);
-      } else {
-        // Success - router.push will happen automatically via redirect
-        router.replace('/c/schemes');
       }
+      // Don't navigate here - let the auth state change handle it
     } catch (err: any) {
       setError(err.message || 'Login failed');
       setLoading(false);
