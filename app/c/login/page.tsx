@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Gem, Sparkles, Phone, KeyRound } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -17,6 +18,7 @@ export default function CustomerLoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { signInWithPhone } = useCustomerAuth();
+  const router = useRouter();
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -29,8 +31,10 @@ export default function CustomerLoginPage() {
       setError(result.error || 'Invalid phone number or PIN');
       setLoading(false);
     } else {
-      // Navigate on success - keep loading state until navigation completes
-      window.location.href = '/c/schemes';
+      // Small delay to ensure session is set before navigation
+      setTimeout(() => {
+        router.push('/c/schemes');
+      }, 100);
     }
   }
 
@@ -107,7 +111,7 @@ export default function CustomerLoginPage() {
               <Button
                 type="submit"
                 className="w-full gold-gradient text-white hover:opacity-90"
-                disabled={loading || pin.length !== 4}
+                disabled={loading || pin.length !== 6}
               >
                 {loading ? 'Signing in...' : 'Sign In'}
               </Button>
