@@ -162,9 +162,6 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
         if (sessionError) {
           return { success: false, error: sessionError.message };
         }
-
-        // Navigate to schemes page
-        router.push('/c/schemes');
       }
 
       return { success: true };

@@ -27,9 +27,11 @@ export default function CustomerLoginPage() {
 
     if (!result.success) {
       setError(result.error || 'Invalid phone number or PIN');
+      setLoading(false);
+    } else {
+      // Navigate on success - keep loading state until navigation completes
+      window.location.href = '/c/schemes';
     }
-
-    setLoading(false);
   }
 
   return (

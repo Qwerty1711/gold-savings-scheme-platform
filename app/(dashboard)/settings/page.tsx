@@ -117,7 +117,7 @@ export default function SettingsPage() {
   // Only ADMIN can access Settings
   useEffect(() => {
     if (profile && !['ADMIN'].includes(profile.role)) {
-      router.push('/dashboard/schemes');
+      router.push('/dashboard/customers');
     }
   }, [profile, router]);
 
