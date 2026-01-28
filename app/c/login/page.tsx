@@ -25,16 +25,19 @@ export default function CustomerLoginPage() {
     setError('');
     setLoading(true);
 
-    const result = await signInWithPhone(phone, pin);
+    try {
+      const result = await signInWithPhone(phone, pin);
 
-    if (!result.success) {
-      setError(result.error || 'Invalid phone number or PIN');
+      if (!result.success) {
+        setError(result.error || 'Invalid phone number or PIN');
+        setLoading(false);
+      } else {
+        // Success - router.push will happen automatically via redirect
+        router.replace('/c/schemes');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Login failed');
       setLoading(false);
-    } else {
-      // Small delay to ensure session is set before navigation
-      setTimeout(() => {
-        router.push('/c/schemes');
-      }, 100);
     }
   }
 

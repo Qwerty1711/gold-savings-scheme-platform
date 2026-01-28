@@ -144,6 +144,7 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone, pin }),
+        signal: AbortSignal.timeout(10000), // 10 second timeout
       });
 
       const data = await response.json();
@@ -166,7 +167,11 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
 
       return { success: true };
     } catch (error: any) {
-      return { success: false, error: error.message };
+      if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+        return { success: false, error: 'Request timeout. Please try again.' };
+      }
+      console.error('Login error:', error);
+      return { success: false, error: error.message || 'Login failed' };
     }
   };
 
