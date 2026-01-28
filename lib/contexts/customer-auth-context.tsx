@@ -31,29 +31,20 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
+  /**
+   * Bootstrap auth state ONCE
+   */
   useEffect(() => {
+    let isMounted = true;
+
     const initializeAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
+      if (!isMounted) return;
+
       setUser(session?.user ?? null);
 
       if (session?.user) {
-        // Get customer via user_profiles link
-        const { data: profile } = await supabase
-          .from('user_profiles')
-          .select('customer_id')
-          .eq('id', session.user.id)
-          .eq('role', 'CUSTOMER')
-          .maybeSingle();
-
-        if (profile?.customer_id) {
-          const { data: customerData } = await supabase
-            .from('customers')
-            .select('id, retailer_id, full_name, phone, email')
-            .eq('id', profile.customer_id)
-            .maybeSingle();
-
-          setCustomer(customerData);
-        }
+        await hydrateCustomer(session.user.id);
       }
 
       setLoading(false);
@@ -61,114 +52,135 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
 
     initializeAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      (async () => {
+    const { data: { subscription } } =
+      supabase.auth.onAuthStateChange(async (_event, session) => {
+        if (!isMounted) return;
+
         setUser(session?.user ?? null);
 
         if (session?.user) {
-          const { data } = await supabase
-            .from('customers')
-            .select('id, retailer_id, full_name, phone, email')
-            .eq('user_id', session.user.id)
-            .maybeSingle();
-
-          setCustomer(data);
+          await hydrateCustomer(session.user.id);
         } else {
           setCustomer(null);
         }
-      })();
-    });
+      });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
-  const sendOTP = async (phone: string): Promise<{ success: boolean; error?: string }> => {
+  /**
+   * Centralized customer hydration
+   */
+  const hydrateCustomer = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('customers')
+      .select('id, retailer_id, full_name, phone, email')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Customer hydrate error:', error);
+      setCustomer(null);
+      return;
+    }
+
+    setCustomer(data ?? null);
+  };
+
+  /**
+   * SEND OTP
+   */
+  const sendOTP = async (phone: string) => {
     try {
-      // Send OTP via our API (reuses registration OTP system)
-      const response = await fetch('/api/auth/send-otp', {
+      const res = await fetch('/api/auth/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone }),
       });
 
-      const data = await response.json();
+      const data = await safeJson(res);
 
-      if (!response.ok) {
-        return { success: false, error: data.error || 'Failed to send OTP' };
+      if (!res.ok) {
+        return { success: false, error: data?.error || 'Failed to send OTP' };
       }
 
-      console.log('Development OTP:', data.otp);
+      if (process.env.NODE_ENV === 'development' && data?.otp) {
+        console.log('DEV OTP:', data.otp);
+      }
+
       return { success: true };
-    } catch (error: any) {
-      return { success: false, error: error.message };
+    } catch (err: any) {
+      console.error('sendOTP error:', err);
+      return { success: false, error: 'Network error. Try again.' };
     }
   };
 
-  const verifyOTP = async (phone: string, token: string): Promise<{ success: boolean; error?: string }> => {
+  /**
+   * VERIFY OTP (API LOGIN)
+   */
+  const verifyOTP = async (phone: string, otp: string) => {
     try {
-      // Verify OTP and get session tokens
-      const otpResponse = await fetch('/api/auth/customer-login', {
+      const res = await fetch('/api/auth/customer-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, otp: token }),
+        body: JSON.stringify({ phone, otp }),
       });
 
-      const otpData = await otpResponse.json();
+      const data = await safeJson(res);
 
-      if (!otpResponse.ok) {
-        return { success: false, error: otpData.error || 'Invalid OTP' };
+      if (res.status === 401) {
+        return { success: false, error: 'Invalid OTP' };
       }
 
-      // Set the session from the response
-      if (otpData.session) {
-        const { error: sessionError } = await supabase.auth.setSession({
-          access_token: otpData.session.access_token,
-          refresh_token: otpData.session.refresh_token,
-        });
+      if (!res.ok) {
+        return { success: false, error: data?.error || 'Login failed' };
+      }
 
-        if (sessionError) {
-          return { success: false, error: sessionError.message };
-        }
+      if (!data?.session) {
+        return { success: false, error: 'Invalid login response' };
+      }
+
+      const { error } = await supabase.auth.setSession({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+      });
+
+      if (error) {
+        console.error('Session set error:', error);
+        return { success: false, error: 'Session error' };
       }
 
       return { success: true };
-    } catch (error: any) {
-      return { success: false, error: error.message };
+    } catch (err) {
+      console.error('verifyOTP error:', err);
+      return { success: false, error: 'Network error. Try again.' };
     }
   };
 
-  const signInWithPhone = async (phone: string, pin: string): Promise<{ success: boolean; error?: string }> => {
+  /**
+   * PIN LOGIN (DIRECT SUPABASE)
+   */
+  const signInWithPhone = async (phone: string, pin: string) => {
     try {
-      // Sign in with phone and PIN - use keepalive to prevent abort
-      const response = await fetch('/api/auth/customer-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, pin }),
-        keepalive: true, // Prevents abort even if component unmounts
+      const normalizedPhone = phone.replace(/\D/g, '');
+      const email = `${normalizedPhone}@customer.goldsaver.app`;
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password: pin,
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: data.error || 'Invalid credentials' };
-      }
-
-      // Set the session from the response
-      if (data.session) {
-        const { error: sessionError } = await supabase.auth.setSession({
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
-        });
-
-        if (sessionError) {
-          return { success: false, error: sessionError.message };
-        }
+      if (error || !data?.session) {
+        return { success: false, error: 'Invalid phone number or PIN' };
       }
 
       return { success: true };
-    } catch (error: any) {
-      console.error('Login error:', error);
-      return { success: false, error: 'Login failed. Please try again.' };
+    } catch (err) {
+      console.error('PIN login error:', err);
+      return { success: false, error: 'Login failed. Try again.' };
     }
   };
 
@@ -180,16 +192,29 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
   };
 
   return (
-    <CustomerAuthContext.Provider value={{ user, customer, loading, sendOTP, verifyOTP, signInWithPhone, signOut }}>
+    <CustomerAuthContext.Provider
+      value={{ user, customer, loading, sendOTP, verifyOTP, signInWithPhone, signOut }}
+    >
       {children}
     </CustomerAuthContext.Provider>
   );
 }
 
+/**
+ * Safe JSON parser (prevents abort cascades)
+ */
+async function safeJson(res: Response) {
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 export function useCustomerAuth() {
   const context = useContext(CustomerAuthContext);
-  if (context === undefined) {
-    throw new Error('useCustomerAuth must be used within a CustomerAuthProvider');
+  if (!context) {
+    throw new Error('useCustomerAuth must be used within CustomerAuthProvider');
   }
   return context;
 }
