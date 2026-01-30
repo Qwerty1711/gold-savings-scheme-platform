@@ -48,6 +48,9 @@ export function PublicBrandingProvider({ children }: { children: ReactNode }) {
   const [isSubdomainMode, setIsSubdomainMode] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+    const abortController = new AbortController();
+
     async function loadBranding() {
       try {
         const subdomain = getSubdomain();
@@ -57,20 +60,27 @@ export function PublicBrandingProvider({ children }: { children: ReactNode }) {
         if (!subdomain) {
           // No subdomain - show default Sync4AI branding
           console.log('No subdomain detected, using default branding');
-          setBranding(defaultBranding);
-          setIsSubdomainMode(false);
-          setLoading(false);
+          if (isMounted) {
+            setBranding(defaultBranding);
+            setIsSubdomainMode(false);
+            setLoading(false);
+          }
           return;
         }
         
-        setIsSubdomainMode(true);
+        if (isMounted) {
+          setIsSubdomainMode(true);
+        }
         
-        // Fetch retailer by subdomain
+        // Fetch retailer by subdomain with abort signal
         const { data, error } = await supabase
           .from('retailers')
           .select('id, name, logo_url, business_name, subdomain')
           .eq('subdomain', subdomain)
+          .abortSignal(abortController.signal)
           .maybeSingle();
+        
+        if (!isMounted) return;
         
         if (error) {
           console.error('Error fetching retailer by subdomain:', error);
@@ -96,16 +106,28 @@ export function PublicBrandingProvider({ children }: { children: ReactNode }) {
           subdomain: data.subdomain,
         });
         
-      } catch (error) {
+      } catch (error: any) {
+        if (error.name === 'AbortError') {
+          console.log('Branding fetch aborted (component unmounted)');
+          return;
+        }
         console.error('Error in loadBranding:', error);
-        setBranding(defaultBranding);
+        if (isMounted) {
+          setBranding(defaultBranding);
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
-    
+
     loadBranding();
-  }, []);
+
+    return () => {
+      isMounted = false;
+      abortController.abort();
+    };
 
   return (
     <PublicBrandingContext.Provider value={{ branding, loading, isSubdomainMode }}>
