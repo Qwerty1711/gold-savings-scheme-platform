@@ -278,9 +278,10 @@ export default function PulseDashboard() {
         // Period paid transactions - limit for performance
         supabase
           .from('transactions')
-          .select('amount_paid, grams_allocated_snapshot, paid_at, enrollment_id')
+          .select('amount_paid, grams_allocated_snapshot, paid_at, enrollment_id, txn_type')
           .eq('retailer_id', retailerId)
           .eq('payment_status', 'SUCCESS')
+          .in('txn_type', ['PRIMARY_INSTALLMENT', 'TOP_UP'])
           .gte('paid_at', startISO)
           .lt('paid_at', endISO)
           .limit(10000), // Limit to prevent slow queries
@@ -392,10 +393,10 @@ export default function PulseDashboard() {
       let gold18KAllocated = 0, gold22KAllocated = 0, gold24KAllocated = 0, silverAllocated = 0;
       
       (txnsResult.data || []).forEach((t: any) => {
+        // Only count PRIMARY_INSTALLMENT and TOP_UP (already filtered in query)
         const karat = enrollmentKaratMap.get(t.enrollment_id);
         const amt = safeNumber(t.amount_paid);
         const grams = safeNumber(t.grams_allocated_snapshot);
-        
         if (karat === '18K') {
           collections18K += amt;
           gold18KAllocated += grams;
