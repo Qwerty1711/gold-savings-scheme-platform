@@ -29,6 +29,7 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
   const [user, setUser] = useState<User | null>(null);
   const [customer, setCustomer] = useState<CustomerProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   /**
@@ -44,9 +45,12 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
       setUser(session?.user ?? null);
 
       if (session?.user) {
-        await hydrateCustomer(session.user.id);
+        try {
+          await hydrateCustomer(session.user.id);
+        } catch (err: any) {
+          setError('Customer hydration error: ' + (err?.message || 'Unknown error'));
+        }
       }
-
       setLoading(false);
     };
 
@@ -59,7 +63,11 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
         setUser(session?.user ?? null);
 
         if (session?.user) {
-          await hydrateCustomer(session.user.id);
+          try {
+            await hydrateCustomer(session.user.id);
+          } catch (err: any) {
+            setError('Customer hydration error: ' + (err?.message || 'Unknown error'));
+          }
         } else {
           setCustomer(null);
         }
@@ -97,6 +105,7 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
     const { data, error } = await query;
     if (error) {
       console.error('Customer hydrate error:', error);
+      setError('Customer hydrate error: ' + error.message);
       setCustomer(null);
       return;
     }
@@ -204,6 +213,9 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
     router.push('/c/login');
   };
 
+  if (error) {
+    return <div className="flex items-center justify-center min-h-screen text-red-600">{error}</div>;
+  }
   return (
     <CustomerAuthContext.Provider
       value={{ user, customer, loading, sendOTP, verifyOTP, signInWithPhone, signOut }}

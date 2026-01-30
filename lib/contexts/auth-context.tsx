@@ -28,6 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -41,6 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (sessionError) {
           console.error('Session error:', sessionError);
+          setError('Session error: ' + sessionError.message);
           setLoading(false);
           return;
         }
@@ -58,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (mounted) {
             if (error) {
               console.error('Error fetching user profile:', error);
+              setError('Error fetching user profile: ' + error.message);
             }
             setProfile(data);
             setLoading(false);
@@ -70,6 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (authErr) {
         console.error('Auth initialization error:', authErr);
         if (mounted) {
+          setError('Auth initialization error: ' + (authErr?.message || 'Unknown error'));
           setLoading(false);
         }
       }
@@ -130,6 +134,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push('/login');
   };
 
+  if (error) {
+    return <div className="flex items-center justify-center min-h-screen text-red-600">{error}</div>;
+  }
   return (
     <AuthContext.Provider value={{ user, profile, loading, signIn, signOut }}>
       {children}

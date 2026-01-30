@@ -46,9 +46,10 @@ export default function NotificationsPage() {
     try {
       const { data } = await supabase
         .from('notification_queue')
-        .select('*')
+        .select('id, notification_type, message, template_key, payload, status, scheduled_for, sent_at, metadata, created_at')
         .eq('customer_id', customer.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50);
 
       if (data) {
         setNotifications(data);
