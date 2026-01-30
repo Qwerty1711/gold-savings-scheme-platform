@@ -373,6 +373,7 @@ export default function PulseDashboard() {
       };
 
       // Fetch all enrollments to get karat information
+      // Fetch ALL enrollments for the retailer (not just ACTIVE)
       const enrollmentsKaratResult = await supabase
         .from('enrollments')
         .select('id, karat')
@@ -397,6 +398,11 @@ export default function PulseDashboard() {
         const karat = enrollmentKaratMap.get(t.enrollment_id);
         const amt = safeNumber(t.amount_paid);
         const grams = safeNumber(t.grams_allocated_snapshot);
+        if (!karat) {
+          // Debug: log missing enrollment_id mapping
+          console.warn('Transaction with enrollment_id not found in enrollments:', t.enrollment_id, t);
+          return;
+        }
         if (karat === '18K') {
           collections18K += amt;
           gold18KAllocated += grams;
