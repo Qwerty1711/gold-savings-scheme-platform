@@ -24,11 +24,12 @@ export default function CustomerLoginPage() {
   function getRetailerId() {
     // Only use values that look like UUIDs
     const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-    if (branding?.retailer_id && uuidRegex.test(branding.retailer_id)) return branding.retailer_id;
-    if (branding?.id && uuidRegex.test(branding.id)) return branding.id;
-    // Try localStorage
+    // 1. Prefer localStorage (persisted from previous login or set by onboarding)
     const lsRetailerId = typeof window !== 'undefined' ? localStorage.getItem('retailer_id') : null;
     if (lsRetailerId && uuidRegex.test(lsRetailerId)) return lsRetailerId;
+    // 2. Fallback to branding context
+    if (branding?.retailer_id && uuidRegex.test(branding.retailer_id)) return branding.retailer_id;
+    if (branding?.id && uuidRegex.test(branding.id)) return branding.id;
     // Do NOT use subdomain or localhost as retailer_id
     return null;
   }
