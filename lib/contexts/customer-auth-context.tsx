@@ -59,18 +59,28 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
     if (phoneBypass) {
       (async () => {
         setLoading(true);
-        const { data, error } = await supabase
-          .from('customers')
-          .select('id, retailer_id, full_name, phone, email')
-          .eq('phone', phoneBypass)
-          .maybeSingle();
-        if (isMounted) {
-          if (data) {
-            setCustomer(data);
-            setUser(null); // No supabase user session
-          } else {
-            setCustomer(null);
+        try {
+          const { data, error } = await supabase
+            .from('customers')
+            .select('id, retailer_id, full_name, phone, email')
+            .eq('phone', phoneBypass)
+            .maybeSingle();
+          if (isMounted) {
+            if (data) {
+              setCustomer(data);
+              setUser(null); // No supabase user session
+            } else {
+              setCustomer(null);
+            }
+            setLoading(false);
           }
+        } catch (err: any) {
+          if (err?.name === 'AbortError') {
+            // Ignore abort errors silently
+            setLoading(false);
+            return;
+          }
+          setError('Customer fetch error: ' + (err?.message || 'Unknown error'));
           setLoading(false);
         }
       })();
