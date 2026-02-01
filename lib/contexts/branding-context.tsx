@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from './auth-context';
+import { useCustomerAuth } from './customer-auth-context';
 
 type RetailerBranding = {
   name: string;
@@ -38,7 +39,14 @@ export function useBranding() {
 }
 
 export function BrandingProvider({ children }: { children: ReactNode }) {
-  const { profile } = useAuth();
+  // Use customer context if available, otherwise staff/admin context
+  let profile: any = undefined;
+  try {
+    profile = useCustomerAuth()?.customer;
+  } catch {
+    // Not in customer portal, fallback to staff/admin
+    profile = useAuth()?.profile;
+  }
   const [branding, setBranding] = useState<RetailerBranding>(defaultBranding);
   const [loading, setLoading] = useState(true);
 
