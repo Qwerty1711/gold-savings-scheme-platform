@@ -8,6 +8,7 @@ type RetailerBranding = {
   name: string;
   logoUrl: string | null;
   businessName: string;
+  retailer_id?: string;
 };
 
 type BrandingContextType = {
@@ -67,6 +68,7 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
           name: data.name || data.business_name || 'Sync4AI',
           logoUrl: data.logo_url,
           businessName: data.business_name || 'Sync4AI',
+          retailer_id: profile?.retailer_id,
         });
       }
     } catch (error: any) {
