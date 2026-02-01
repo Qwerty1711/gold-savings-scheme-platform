@@ -215,7 +215,7 @@ export function TopBar() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuItem onClick={() => router.push('/enroll')}>
-                Enroll Customer
+                New Enrollment
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => router.push('/collections')}>
                 Record Payment
