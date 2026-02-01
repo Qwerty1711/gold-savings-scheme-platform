@@ -30,12 +30,21 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
   const [customer, setCustomer] = useState<CustomerProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
   const router = useRouter();
 
+  // Track hydration - only access browser APIs after mount
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   /**
-   * Bootstrap auth state ONCE
+   * Bootstrap auth state ONCE - only after hydration
    */
   useEffect(() => {
+    // Don't run until after hydration to prevent mismatch
+    if (!mounted) return;
+
     let isMounted = true;
 
     const initializeAuth = async () => {
@@ -55,32 +64,20 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
     };
 
     // BYPASS: If phone in localStorage, fetch customer by phone
-    const phoneBypass = typeof window !== 'undefined' ? localStorage.getItem('customer_phone_bypass') : null;
+    const phoneBypass = localStorage.getItem('customer_phone_bypass');
     if (phoneBypass) {
       (async () => {
         setLoading(true);
         try {
-          let data = null, error = null;
-          try {
-            const result = await supabase
-              .from('customers')
-              .select('id, retailer_id, full_name, phone, email')
-              .eq('phone', phoneBypass)
-              .maybeSingle();
-            data = result.data;
-            error = result.error;
-          } catch (err) {
-            const errorObj = err as any;
-            if (errorObj?.name === 'AbortError') {
-              console.warn('Suppressed AbortError in customer phone bypass:', err);
-              setLoading(false);
-              return;
-            }
-            throw err;
-          }
+          const result = await supabase
+            .from('customers')
+            .select('id, retailer_id, full_name, phone, email')
+            .eq('phone', phoneBypass)
+            .maybeSingle();
+          
           if (isMounted) {
-            if (data) {
-              setCustomer(data);
+            if (result.data) {
+              setCustomer(result.data);
               setUser(null); // No supabase user session
             } else {
               setCustomer(null);
@@ -88,6 +85,11 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
             setLoading(false);
           }
         } catch (err: any) {
+          if (err?.name === 'AbortError') {
+            console.warn('Suppressed AbortError in customer phone bypass');
+            setLoading(false);
+            return;
+          }
           setError('Customer fetch error: ' + (err?.message || 'Unknown error'));
           setLoading(false);
         }
@@ -118,7 +120,7 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [mounted]);
 
   /**
    * Centralized customer hydration
