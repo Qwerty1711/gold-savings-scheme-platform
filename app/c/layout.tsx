@@ -1,3 +1,4 @@
+'import React from "react";'
 'use client';
 
 import { CustomerAuthProvider, useCustomerAuth } from '@/lib/contexts/customer-auth-context';
