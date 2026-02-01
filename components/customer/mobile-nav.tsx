@@ -2,14 +2,15 @@
 
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Home, Wallet, Receipt, Bell, User } from 'lucide-react';
+import { Activity, ScrollText, Wallet, Gift, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
-  { href: '/c/schemes', icon: Home, label: 'Home' },
-  { href: '/c/wallet', icon: Wallet, label: 'Wallet' },
-  { href: '/c/passbook', icon: Receipt, label: 'Passbook' },
-  { href: '/c/notifications', icon: Bell, label: 'Alerts' },
+  { href: '/c/pulse', icon: Activity, label: 'Pulse' },
+  { href: '/c/plans', icon: ScrollText, label: 'Plans' },
+  { href: '/c/collections', icon: Wallet, label: 'Collections' },
+  { href: '/c/redemptions', icon: Gift, label: 'Redemptions' },
+  { href: '/c/dues', icon: AlertCircle, label: 'Dues' },
 ];
 
 export function CustomerMobileNav() {
@@ -20,7 +21,7 @@ export function CustomerMobileNav() {
       <div className="flex items-center justify-around h-16 px-2">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.href;
+          const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
 
           return (
             <Link
