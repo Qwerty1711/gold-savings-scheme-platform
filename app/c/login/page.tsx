@@ -61,6 +61,11 @@ export default function CustomerLoginPage() {
         .eq('retailer_id', retailerId)
         .maybeSingle();
 
+      // Persist retailer_id for future logins if found
+      if (customer?.retailer_id) {
+        localStorage.setItem('retailer_id', customer.retailer_id);
+      }
+
       if (fetchError) {
         setError('Error checking customer: ' + fetchError.message);
         setLoading(false);

@@ -261,6 +261,11 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
     await supabase.auth.signOut();
     setUser(null);
     setCustomer(null);
+    // Restore retailer_id from last session if available
+    const lastRetailerId = localStorage.getItem('retailer_id');
+    if (lastRetailerId) {
+      localStorage.setItem('retailer_id', lastRetailerId);
+    }
     router.push('/c/login');
   };
 
