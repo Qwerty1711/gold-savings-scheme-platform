@@ -57,7 +57,7 @@ export default function CustomerLoginPage() {
       localStorage.setItem('customer_phone_bypass', cleanPhone);
       
       // Force full page reload to trigger auth context refresh
-      window.location.href = '/c/schemes';
+      window.location.href = '/c/pulse';
     } catch (err: any) {
       setError('Login failed: ' + (err?.message || 'Unknown error'));
       setLoading(false);
