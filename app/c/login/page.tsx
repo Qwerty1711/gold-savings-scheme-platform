@@ -13,26 +13,24 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/lib/supabase/client';
 import { useBranding } from '@/lib/contexts/branding-context';
 
+import { useEffect } from 'react';
+
 export default function CustomerLoginPage() {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [retailers, setRetailers] = useState<{ id: string; business_name: string }[]>([]);
+  const [selectedRetailer, setSelectedRetailer] = useState<string>('');
   const router = useRouter();
   const submittingRef = useRef(false);
-  const { branding } = useBranding();
-  // Fallback: get retailer_id from localStorage or subdomain if branding is missing
-  function getRetailerId() {
-    // Only use values that look like UUIDs
-    const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-    // 1. Prefer localStorage (persisted from previous login or set by onboarding)
-    const lsRetailerId = typeof window !== 'undefined' ? localStorage.getItem('retailer_id') : null;
-    if (lsRetailerId && uuidRegex.test(lsRetailerId)) return lsRetailerId;
-    // 2. Fallback to branding context
-    if (branding?.retailer_id && uuidRegex.test(branding.retailer_id)) return branding.retailer_id;
-    if (branding?.id && uuidRegex.test(branding.id)) return branding.id;
-    // Do NOT use subdomain or localhost as retailer_id
-    return null;
-  }
+  // Fetch all retailers on mount
+  useEffect(() => {
+    async function fetchRetailers() {
+      const { data, error } = await supabase.from('retailers').select('id, business_name').order('business_name');
+      if (!error && data) setRetailers(data);
+    }
+    fetchRetailers();
+  }, []);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -46,10 +44,9 @@ export default function CustomerLoginPage() {
     try {
       // Clean phone number - remove spaces and special chars
       const cleanPhone = phone.replace(/\s+/g, '').replace(/[^\d+]/g, '');
-      // Get retailer_id from context, localStorage, or subdomain
-      const retailerId = getRetailerId();
-      if (!retailerId) {
-        setError('Retailer not found. Please contact support.');
+      // Require retailer selection
+      if (!selectedRetailer) {
+        setError('Please select your retailer.');
         setLoading(false);
         submittingRef.current = false;
         return;
@@ -59,7 +56,7 @@ export default function CustomerLoginPage() {
         .from('customers')
         .select('id, full_name, phone, retailer_id')
         .eq('phone', cleanPhone)
-        .eq('retailer_id', retailerId)
+        .eq('retailer_id', selectedRetailer)
         .maybeSingle();
 
       // Persist retailer_id for future logins if found
@@ -135,45 +132,64 @@ export default function CustomerLoginPage() {
                     id="phone"
                     type="tel"
                     placeholder="+91 98765 43210"
-                    className="pl-10"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    required
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Use the mobile number registered with your jeweller
-                </p>
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full gold-gradient text-white hover:opacity-90"
-                disabled={loading || phone.length < 10}
-              >
-                {loading ? 'Signing in...' : 'View My Passbook'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-primary/5 border-primary/20">
-          <CardContent className="pt-6">
-            <div className="space-y-2">
-              <h3 className="font-semibold flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-primary" />
-                Quick Access Mode
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                🔓 <strong>Testing Mode</strong> - No PIN required
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Simply enter your registered phone number to access your gold passbook.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
+                    <Card className="glass-card">
+                      <CardHeader>
+                        <CardTitle>Sign In</CardTitle>
+                        <CardDescription>
+                          Enter your registered mobile number to view your passbook
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {error && (
+                          <Alert variant="destructive">
+                            <AlertDescription>{error}</AlertDescription>
+                          </Alert>
+                        )}
+                        <form onSubmit={handleLogin} className="space-y-4">
+                          <div>
+                            <Label htmlFor="retailer">Retailer</Label>
+                            <select
+                              id="retailer"
+                              required
+                              className="w-full mt-1 rounded-lg border-gold-200 focus:border-gold-500 focus:ring-gold-400/20 px-3 py-2"
+                              value={selectedRetailer}
+                              onChange={e => setSelectedRetailer(e.target.value)}
+                            >
+                              <option value="">Select your retailer</option>
+                              {retailers.map(r => (
+                                <option key={r.id} value={r.id}>{r.business_name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <Label htmlFor="phone">Mobile Number</Label>
+                            <div className="relative mt-1">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gold-600">
+                                <Phone className="w-5 h-5" />
+                              </span>
+                              <Input
+                                id="phone"
+                                type="tel"
+                                autoComplete="tel"
+                                required
+                                minLength={8}
+                                maxLength={16}
+                                className="pl-10"
+                                value={phone}
+                                onChange={(e) => setPhone(e.target.value)}
+                              />
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Use the mobile number registered with your jeweller
+                            </p>
+                          </div>
+                          <Button
+                            type="submit"
+                            className="w-full jewel-gradient text-white font-bold text-lg py-3 rounded-2xl shadow-lg hover:opacity-90 transition-all"
+                            disabled={loading}
+                          >
+                            {loading ? 'Signing In...' : 'View My Passbook'}
+                          </Button>
+                        </form>
+                      </CardContent>
+                    </Card>
