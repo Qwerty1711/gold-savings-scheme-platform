@@ -54,6 +54,29 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
       setLoading(false);
     };
 
+    // BYPASS: If phone in localStorage, fetch customer by phone
+    const phoneBypass = typeof window !== 'undefined' ? localStorage.getItem('customer_phone_bypass') : null;
+    if (phoneBypass) {
+      (async () => {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('customers')
+          .select('id, retailer_id, full_name, phone, email')
+          .eq('phone', phoneBypass)
+          .maybeSingle();
+        if (isMounted) {
+          if (data) {
+            setCustomer(data);
+            setUser(null); // No supabase user session
+          } else {
+            setCustomer(null);
+          }
+          setLoading(false);
+        }
+      })();
+      return () => { isMounted = false; };
+    }
+
     initializeAuth();
 
     const { data: { subscription } } =
