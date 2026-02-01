@@ -9,3 +9,6 @@ export default function CustomerLoginPage() {
 
   // ❌ DO NOT ADD JSX YET
 }
+useEffect(() => {
+  console.log('mounted');
+}, []);
