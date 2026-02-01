@@ -45,18 +45,21 @@ function CustomerGuard({ children }: { children: React.ReactNode }) {
 
 export default function CustomerLayout({ children }: { children: React.ReactNode }) {
   const CustomerTopBar = require('@/components/customer/top-bar').CustomerTopBar;
+  const BrandingProvider = require('@/lib/contexts/branding-context').BrandingProvider;
   return (
-    <CustomerAuthProvider>
-      <AbortErrorBoundary>
-        <CustomerGuard>
-          <div className="min-h-screen pb-20 md:pb-0">
-            <CustomerTopBar />
-            {children}
-            <CustomerMobileNav />
-          </div>
-        </CustomerGuard>
-      </AbortErrorBoundary>
-    </CustomerAuthProvider>
+    <BrandingProvider>
+      <CustomerAuthProvider>
+        <AbortErrorBoundary>
+          <CustomerGuard>
+            <div className="min-h-screen pb-20 md:pb-0">
+              <CustomerTopBar />
+              {children}
+              <CustomerMobileNav />
+            </div>
+          </CustomerGuard>
+        </AbortErrorBoundary>
+      </CustomerAuthProvider>
+    </BrandingProvider>
   );
 }
 
