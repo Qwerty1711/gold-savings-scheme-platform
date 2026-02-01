@@ -44,11 +44,13 @@ function CustomerGuard({ children }: { children: React.ReactNode }) {
 }
 
 export default function CustomerLayout({ children }: { children: React.ReactNode }) {
+  const CustomerTopBar = require('@/components/customer/top-bar').CustomerTopBar;
   return (
     <CustomerAuthProvider>
       <AbortErrorBoundary>
         <CustomerGuard>
           <div className="min-h-screen pb-20 md:pb-0">
+            <CustomerTopBar />
             {children}
             <CustomerMobileNav />
           </div>
