@@ -69,12 +69,20 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
       (async () => {
         setLoading(true);
         try {
-          const result = await supabase
+          // Try to get retailer_id from branding context if available
+          let retailerId = null;
+          try {
+            const { useBranding } = await import('@/lib/contexts/branding-context');
+            retailerId = useBranding()?.branding?.retailer_id || useBranding()?.branding?.id;
+          } catch {}
+          let query = supabase
             .from('customers')
             .select('id, retailer_id, full_name, phone, email')
-            .eq('phone', phoneBypass)
-            .maybeSingle();
-          
+            .eq('phone', phoneBypass);
+          if (retailerId) {
+            query = query.eq('retailer_id', retailerId);
+          }
+          const result = await query.maybeSingle();
           if (isMounted) {
             if (result.data) {
               setCustomer(result.data);
