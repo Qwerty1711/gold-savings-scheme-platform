@@ -47,8 +47,8 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
   const CustomerTopBar = require('@/components/customer/top-bar').CustomerTopBar;
   const BrandingProvider = require('@/lib/contexts/branding-context').BrandingProvider;
   return (
-    <BrandingProvider>
-      <CustomerAuthProvider>
+    <CustomerAuthProvider>
+      <BrandingProvider>
         <AbortErrorBoundary>
           <CustomerGuard>
             <div className="min-h-screen pb-20 md:pb-0">
@@ -58,8 +58,8 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
             </div>
           </CustomerGuard>
         </AbortErrorBoundary>
-      </CustomerAuthProvider>
-    </BrandingProvider>
+      </BrandingProvider>
+    </CustomerAuthProvider>
   );
 }
 
