@@ -220,8 +220,11 @@ export default function CustomerSchemesPage() {
         );
 
         const duration = Number(plan?.duration_months || 0);
-        const totalPaid = Number(e.total_paid || 0);
-        const totalGrams = Number(e.total_grams_allocated || 0);
+
+        // Use transaction totals for actuals
+        const txnTotals = transactionTotals.get(e.id) || { totalPaid: 0, totalGrams: 0 };
+        const totalPaid = txnTotals.totalPaid;
+        const totalGrams = txnTotals.totalGrams;
 
         const bm = thisMonthMap.get(e.id);
         const paidThisMonth = Boolean(bm?.primary_paid);
@@ -246,10 +249,9 @@ export default function CustomerSchemesPage() {
           id: e.id,
           status: (e.status || 'ACTIVE').toString(),
           planName: plan?.name || 'Unknown Plan',
-          totalGrams: duration,
+          totalGrams: totalGrams,
           monthlyAmount: monthly,
           totalPaid: totalPaid,
-          totalGrams: totalGrams,
           installmentsPaid: installmentsPaidMap.get(e.id) || 0,
           startDateLabel,
           monthlyInstallmentPaid: paidThisMonth,
@@ -514,6 +516,35 @@ export default function CustomerSchemesPage() {
               })}
             </div>
           </div>
+          {/* Other Active Plans Section */}
+          {availablePlans.length > 0 && (
+            <div className="space-y-6 mt-10">
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-gold-600 to-rose-600 bg-clip-text text-transparent">Other Active Plans</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {availablePlans
+                  .filter(plan => !enrollments.some(e => e.planName === plan.plan_name))
+                  .map(plan => (
+                    <Card key={plan.id} className="p-6 flex flex-col justify-between gap-4 shadow-md">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-lg font-bold text-gold-700 dark:text-gold-300">{plan.plan_name}</span>
+                          {plan.karat && <span className="px-2 py-1 rounded-full bg-gold-100 text-gold-700 text-xs font-semibold">{plan.karat}</span>}
+                        </div>
+                        <div className="flex flex-col gap-1 text-sm">
+                          <div><span className="font-medium text-amber-700">Monthly Min:</span> ₹{Number(plan.monthly_amount).toLocaleString()}</div>
+                          <div><span className="font-medium text-blue-700">Duration:</span> {plan.tenure_months} months</div>
+                          {/* Bonus details placeholder, replace with actual bonus info if available */}
+                          <div><span className="font-medium text-green-700">Bonus:</span> {plan.bonus_details || 'See scheme terms'}</div>
+                        </div>
+                      </div>
+                      <Button className="jewel-gradient text-white mt-4" onClick={() => openEnrollDialog(plan)}>
+                        Enroll
+                      </Button>
+                    </Card>
+                  ))}
+              </div>
+            </div>
+          )}
         )}
 
         {enrollments.length === 0 && availablePlans.length === 0 && (
