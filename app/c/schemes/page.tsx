@@ -107,23 +107,29 @@ export default function CustomerSchemesPage() {
       if (enrollmentRows.length > 0) {
         const enrollmentIds = enrollmentRows.map(e => e.id);
 
-        // Fixed: query includes order and limit inside supabase call
-        try {
-          const { data: txData, error } = await supabase
-            .from('transactions')
-            .select('id, enrollment_id, scheme_id, amount_paid, grams_allocated, month, payment_status, txn_type')
-            .or(`enrollment_id.in.(${enrollmentIds.join(',')})`)
-            .order('paid_at', { ascending: false })
-            .limit(500);
-
-          if (error) console.warn('DEBUG transaction query error:', error);
-          if (txData && txData.length > 0) {
-            transactions = txData;
-          } else {
-            console.warn('DEBUG: No transactions found for enrollments:', enrollmentIds);
+        if (enrollmentIds.length > 0) {
+          try {
+            const { data: txData, error } = await supabase
+              .from('transactions')
+              .select('id, enrollment_id, amount_paid, grams_allocated_snapshot, paid_at, txn_type, payment_status, month')
+              .eq('retailer_id', customer.retailer_id)
+              .eq('payment_status', 'SUCCESS')
+              .in('txn_type', ['PRIMARY_INSTALLMENT', 'TOP_UP'])
+              .in('enrollment_id', enrollmentIds)
+              .order('paid_at', { ascending: false })
+              .limit(500);
+            if (error) {
+              console.warn('DEBUG transaction query error:', error);
+            }
+            if (txData && txData.length > 0) {
+              transactions = txData;
+              console.log('DEBUG transactions (pulse logic):', transactions);
+            } else {
+              console.warn('DEBUG: No transactions found for enrollments:', enrollmentIds);
+            }
+          } catch (err) {
+            console.error('DEBUG transactions query error:', err);
           }
-        } catch (err) {
-          console.error('DEBUG transactions query error:', err);
         }
       }
 
