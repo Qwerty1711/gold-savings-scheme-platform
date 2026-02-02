@@ -85,15 +85,15 @@ export default function CustomerSchemesPage() {
     setLoading(true);
 
     try {
-      // Fetch all plans from scheme_templates (admin source)
+      // Fetch ALL plans for mapping (active/inactive, self-enroll or not)
       const allPlansResult = await supabase
         .from('scheme_templates')
         .select('id, retailer_id, name, installment_amount, duration_months, bonus_percentage, description, is_active, allow_self_enroll')
-        .eq('retailer_id', customer.retailer_id)
-        .eq('is_active', true)
-        .eq('allow_self_enroll', true);
+        .eq('retailer_id', customer.retailer_id);
       const allPlans: Plan[] = allPlansResult.data || [];
-      setAvailablePlans(allPlans);
+
+      // Only show available plans for enrollment (active + self-enroll)
+      setAvailablePlans(allPlans.filter(p => p.is_active && p.allow_self_enroll));
 
       // Fetch enrollments
       const enrollmentsResult = await supabase
@@ -108,7 +108,6 @@ export default function CustomerSchemesPage() {
       let transactions: Transaction[] = [];
       if (enrollmentRows.length > 0) {
         const enrollmentIds = enrollmentRows.map(e => e.id);
-
         if (enrollmentIds.length > 0) {
           try {
             const { data: txData, error } = await supabase
@@ -148,6 +147,17 @@ export default function CustomerSchemesPage() {
         const totalPaid = txs.reduce((sum, t) => sum + (t.amount_paid || 0), 0);
         const totalGrams = txs.reduce((sum, t) => sum + (t.grams_allocated_snapshot || 0), 0);
         const installmentsPaid = txs.filter(t => t.txn_type === 'PRIMARY_INSTALLMENT').length;
+        // Build a map of paid months for calendar
+        const paidMonths = new Set(
+          txs.filter(t => t.txn_type === 'PRIMARY_INSTALLMENT').map(t => {
+            if (t.paid_at) {
+              const d = new Date(t.paid_at);
+              return `${d.getFullYear()}-${d.getMonth()}`;
+            }
+            return '';
+          })
+        );
+
         const currentMonthTx = txs.find(t => t.month === currentMonthStr);
         const monthlyInstallmentPaid = currentMonthTx?.txn_type === 'PRIMARY_INSTALLMENT';
         const dueDate = currentMonthTx?.month || null;
@@ -175,6 +185,8 @@ export default function CustomerSchemesPage() {
           daysOverdue,
           nextPaymentDate,
           transactions: txs,
+          paidMonths,
+          plan,
         };
       });
 
@@ -249,7 +261,7 @@ export default function CustomerSchemesPage() {
             <h2 className="text-3xl font-bold bg-gradient-to-r from-gold-600 to-rose-600 bg-clip-text text-transparent">Available Plans</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {availablePlans
-                .filter(plan => !enrollments.some(e => e.planName === plan.name))
+                .filter(plan => !enrollments.some(e => e.plan && e.plan.id === plan.id))
                 .map(plan => (
                   <Card key={plan.id} className="group overflow-hidden">
                     <div className="h-28 bg-gradient-to-br from-rose-400 via-gold-400 to-amber-600 relative overflow-hidden">
@@ -270,7 +282,7 @@ export default function CustomerSchemesPage() {
                     </CardContent>
                   </Card>
                 ))}
-              {availablePlans.filter(plan => !enrollments.some(e => e.planName === plan.name)).length === 0 && (
+              {availablePlans.filter(plan => !enrollments.some(e => e.plan && e.plan.id === plan.id)).length === 0 && (
                 <div className="col-span-full text-center text-muted-foreground py-8">All available plans are already enrolled.</div>
               )}
             </div>
@@ -325,17 +337,32 @@ export default function CustomerSchemesPage() {
                         </div>
                       )}
 
-                      {/* Mini Calendar / Gold Accumulation */}
-                      {enrollment.transactions && (
-                        <div className="grid grid-cols-6 gap-1 mt-2">
+                      {/* Mini Calendar with month labels and paid status */}
+                      <div className="flex flex-col items-center mt-2">
+                        <div className="grid grid-cols-6 gap-1">
                           {Array.from({ length: enrollment.durationMonths }, (_, i) => {
-                            // Always show calendar dots, even if no transactions
-                            const tx = enrollment.transactions?.find(t => t.txn_type === 'PRIMARY_INSTALLMENT' && i === 0); // Simplified: mark first paid, rest due
-                            const paid = tx ? true : false;
-                            return <div key={i} className={`w-4 h-4 rounded-full border ${paid ? 'bg-gold-500 border-gold-700' : 'bg-muted-foreground/40 border-gold-200'}`} title={`Month ${i + 1}: ${paid ? 'Paid' : 'Due'}`}></div>;
+                            // Calculate the month for this dot
+                            const start = enrollment.plan?.created_at ? new Date(enrollment.plan.created_at) : (enrollment.startDateLabel ? new Date(enrollment.startDateLabel) : new Date());
+                            const monthDate = new Date(start.getFullYear(), start.getMonth() + i, 1);
+                            const monthKey = `${monthDate.getFullYear()}-${monthDate.getMonth()}`;
+                            const paid = enrollment.paidMonths && enrollment.paidMonths.has(monthKey);
+                            return (
+                              <div key={i} className={`w-4 h-4 rounded-full border ${paid ? 'bg-green-500 border-green-700' : 'bg-muted-foreground/40 border-gold-200'}`} title={`${monthDate.toLocaleString('en-IN', { month: 'short', year: '2-digit' })}: ${paid ? 'Paid' : 'Due'}`}></div>
+                            );
                           })}
                         </div>
-                      )}
+                        <div className="grid grid-cols-6 gap-1 mt-1">
+                          {Array.from({ length: enrollment.durationMonths }, (_, i) => {
+                            const start = enrollment.plan?.created_at ? new Date(enrollment.plan.created_at) : (enrollment.startDateLabel ? new Date(enrollment.startDateLabel) : new Date());
+                            const monthDate = new Date(start.getFullYear(), start.getMonth() + i, 1);
+                            return (
+                              <div key={i} className="w-8 text-xs text-center text-muted-foreground">
+                                {monthDate.toLocaleString('en-IN', { month: 'short' })}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
 
                       <div className="flex gap-2 mt-2">
                         {isActive && !enrollment.monthlyInstallmentPaid && (
