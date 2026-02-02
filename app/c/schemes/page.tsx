@@ -129,94 +129,99 @@ export default function CustomerSchemesPage() {
               // Map to enrollment_id if possible, else fallback to scheme_id
               transactions = txData.map(t => ({
                 ...t,
-                enrollment_id: t.enrollment_id || t.scheme_id
-              }));
-              console.log('DEBUG transactions (merged):', transactions);
-            }
-          } catch (err) {
-            console.error('DEBUG transactions query error:', err);
-          }
-        }
+                // Fetch enrollments (with scheme_templates for plan details)
+                const enrollmentsResult = await supabase
+                  .from('enrollments')
+                  .select('id, plan_id, commitment_amount, status, created_at, scheme_templates(name, installment_amount, duration_months)')
+                  .eq('customer_id', customer.id)
+                  .eq('retailer_id', customer.retailer_id)
+                  .order('created_at', { ascending: false });
+                console.log('DEBUG enrollmentsResult:', enrollmentsResult.data);
 
-        const transactionsMap = new Map<string, Transaction[]>();
-        (transactions || []).forEach(tx => {
-          const arr = transactionsMap.get(tx.enrollment_id) || [];
-          arr.push(tx);
-          transactionsMap.set(tx.enrollment_id, arr);
-        });
+                if (enrollmentsResult.data && enrollmentsResult.data.length > 0) {
+                  const enrollmentRows = enrollmentsResult.data as any[];
+                  const planMap = new Map(allPlans.map(t => [t.id, t]));
+                  const enrollmentIds = enrollmentRows.map(e => e.id);
 
-        // Map enrollments to cards with live data
-        const cards: EnrollmentCard[] = enrollmentRows.map(e => {
-          const plan = planMap.get(e.plan_id);
-          if (!plan) console.warn('DEBUG missing plan for enrollment', e);
-          const monthly = Number(e.commitment_amount || plan?.installment_amount || 0);
-          const duration = Number(plan?.duration_months || 0);
-          const startDateLabel = e.created_at
-            ? new Date(e.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-            : null;
+                  // Fetch transactions for these enrollments, matching Pulse logic
+                  let transactions: Transaction[] = [];
+                  if (enrollmentIds.length > 0) {
+                    try {
+                      const { data: txData, error } = await supabase
+                        .from('transactions')
+                        .select('id, enrollment_id, amount_paid, grams_allocated_snapshot, paid_at, txn_type, payment_status, month')
+                        .eq('retailer_id', customer.retailer_id)
+                        .eq('payment_status', 'SUCCESS')
+                        .in('txn_type', ['PRIMARY_INSTALLMENT', 'TOP_UP'])
+                        .in('enrollment_id', enrollmentIds)
+                        .order('paid_at', { ascending: false })
+                        .limit(500);
+                      if (error) {
+                        console.warn('DEBUG transaction query error:', error);
+                      }
+                      if (txData && txData.length > 0) {
+                        transactions = txData;
+                        console.log('DEBUG transactions (pulse logic):', transactions);
+                      } else {
+                        console.warn('DEBUG: No transactions found for enrollments:', enrollmentIds);
+                      }
+                    } catch (err) {
+                      console.error('DEBUG transactions query error:', err);
+                    }
+                  }
 
-          // Find all transactions for this enrollment (by id or plan_id fallback)
-          const txs = transactions.filter(t => t.enrollment_id === e.id || t.scheme_id === e.plan_id);
-          const totalPaid = txs.reduce((sum, t) => sum + (t.amount_paid || 0), 0);
-          const totalGrams = txs.reduce((sum, t) => sum + (t.grams_allocated || 0), 0);
-          const installmentsPaid = txs.filter(t => t.payment_status === 'PAID').length;
-          const currentMonthTx = txs.find(t => t.month === currentMonthStr);
-          const monthlyInstallmentPaid = currentMonthTx?.payment_status === 'PAID';
-          const dueDate = currentMonthTx?.month || null;
-          const daysOverdue = monthlyInstallmentPaid
-            ? 0
-            : currentMonthTx
-            ? Math.max(0, Math.floor((Date.now() - new Date(currentMonthTx.month).getTime()) / (1000 * 60 * 60 * 24)))
-            : undefined;
+                  // Map enrollments to cards
+                  const cards: EnrollmentCard[] = enrollmentRows.map(e => {
+                    // Prefer scheme_templates for plan details
+                    const plan = e.scheme_templates || planMap.get(e.plan_id);
+                    if (!plan) console.warn('DEBUG missing plan for enrollment', e);
+                    const monthly = Number(e.commitment_amount || plan?.installment_amount || 0);
+                    const duration = Number(plan?.duration_months || 0);
+                    const startDateLabel = e.created_at
+                      ? new Date(e.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                      : null;
 
-          // Next Payment calculation
-          const upcomingTx = txs.find(t => t.payment_status === 'DUE');
-          const nextPaymentDate = upcomingTx ? upcomingTx.month : null;
+                    // Find all transactions for this enrollment
+                    const txs = transactions.filter(t => t.enrollment_id === e.id);
+                    if (!txs || txs.length === 0) {
+                      console.warn('DEBUG: No transactions mapped for enrollment', e.id, e.plan_id);
+                    }
+                    const totalPaid = txs.reduce((sum, t) => sum + (t.amount_paid || 0), 0);
+                    const totalGrams = txs.reduce((sum, t) => sum + (t.grams_allocated_snapshot || 0), 0);
+                    const installmentsPaid = txs.filter(t => t.txn_type === 'PRIMARY_INSTALLMENT').length;
+                    const currentMonthTx = txs.find(t => t.month === currentMonthStr);
+                    const monthlyInstallmentPaid = currentMonthTx?.txn_type === 'PRIMARY_INSTALLMENT';
+                    const dueDate = currentMonthTx?.month || null;
+                    const daysOverdue = monthlyInstallmentPaid
+                      ? 0
+                      : currentMonthTx
+                      ? Math.max(0, Math.floor((Date.now() - new Date(currentMonthTx.month).getTime()) / (1000 * 60 * 60 * 24)))
+                      : undefined;
 
-          return {
-            id: e.id,
-            status: e.status || 'ACTIVE',
-            planName: plan?.name || 'Unknown Plan',
-            durationMonths: duration,
-            monthlyAmount: monthly,
-            totalPaid,
-            totalGrams,
-            installmentsPaid,
-            startDateLabel,
-            monthlyInstallmentPaid,
-            dueDate,
-            daysOverdue,
-            nextPaymentDate,
-            transactions: txs,
-          };
-        });
+                    // Next Payment calculation
+                    const upcomingTx = txs.find(t => t.txn_type === 'PRIMARY_INSTALLMENT' && t.payment_status !== 'SUCCESS');
+                    const nextPaymentDate = upcomingTx ? upcomingTx.month : null;
 
-        setEnrollments(cards);
-      }
-    } catch (err) {
-      console.error('DEBUG loadData error:', err);
-    } finally {
-      setLoading(false);
-    }
-  }
+                    return {
+                      id: e.id,
+                      status: e.status || 'ACTIVE',
+                      planName: plan?.name || plan?.plan_name || 'Unknown Plan',
+                      durationMonths: duration,
+                      monthlyAmount: monthly,
+                      totalPaid,
+                      totalGrams,
+                      installmentsPaid,
+                      startDateLabel,
+                      monthlyInstallmentPaid,
+                      dueDate,
+                      daysOverdue,
+                      nextPaymentDate,
+                      transactions: txs,
+                    };
+                  });
 
-  function openEnrollDialog(plan: Plan) {
-    setSelectedPlan(plan);
-    setCommitmentAmount(String(plan.monthly_amount));
-    setEnrollDialogOpen(true);
-  }
-
-  async function handleEnroll() {
-    if (!selectedPlan || !commitmentAmount || !customer) return;
-    const amount = parseFloat(commitmentAmount);
-    if (Number.isNaN(amount) || amount < selectedPlan.monthly_amount) {
-      toast.error(`Commitment must be at least ₹${selectedPlan.monthly_amount}`);
-      return;
-    }
-
-    setEnrolling(true);
-    try {
-      const { data, error } = await supabase.rpc('customer_self_enroll', {
+                  setEnrollments(cards);
+                }
         p_plan_id: selectedPlan.id,
         p_commitment_amount: amount,
         p_source: 'CUSTOMER_PORTAL',
@@ -321,6 +326,9 @@ export default function CustomerSchemesPage() {
                       </div>
                       <div className="text-base text-gold-100/80 mt-2">Started: {enrollment.startDateLabel}</div>
                       <div className="text-sm text-gold-100/80 mt-1">Total Paid: ₹{enrollment.totalPaid.toLocaleString()} • Gold Allocated: {enrollment.totalGrams.toFixed(2)}g</div>
+                      {(!enrollment.transactions || enrollment.transactions.length === 0) && (
+                        <div className="text-xs text-red-600 mt-1">No transactions found for this plan. Please check your payment history or contact support.</div>
+                      )}
                     </div>
 
                     <CardContent className="space-y-4">
