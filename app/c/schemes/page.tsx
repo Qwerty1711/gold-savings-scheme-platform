@@ -534,7 +534,7 @@ export default function CustomerSchemesPage() {
                           <div><span className="font-medium text-amber-700">Monthly Min:</span> ₹{Number(plan.monthly_amount).toLocaleString()}</div>
                           <div><span className="font-medium text-blue-700">Duration:</span> {plan.tenure_months} months</div>
                           {/* Bonus details placeholder, replace with actual bonus info if available */}
-                          <div><span className="font-medium text-green-700">Bonus:</span> {plan.bonus_details || 'See scheme terms'}</div>
+                          <div><span className="font-medium text-green-700">Bonus:</span> {'bonus_details' in plan && plan.bonus_details ? plan.bonus_details : 'See scheme terms'}</div>
                         </div>
                       </div>
                       <Button className="jewel-gradient text-white mt-4" onClick={() => openEnrollDialog(plan)}>
