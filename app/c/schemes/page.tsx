@@ -24,6 +24,7 @@ type Plan = {
   description?: string | null;
   is_active?: boolean | null;
   allow_self_enroll?: boolean | null;
+  created_at?: string | null;
 };
 
 type Transaction = {
