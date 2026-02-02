@@ -74,7 +74,10 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
           try {
             const { useBranding } = await import('@/lib/contexts/branding-context');
             retailerId = useBranding()?.branding?.retailer_id || useBranding()?.branding?.id;
-          } catch {}
+            console.log('[CustomerAuth] Branding context retailerId:', retailerId);
+          } catch (e) {
+            console.warn('[CustomerAuth] Branding context not available:', e);
+          }
           let query = supabase
             .from('customers')
             .select('id, retailer_id, full_name, phone, email')
@@ -82,13 +85,18 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
           if (retailerId) {
             query = query.eq('retailer_id', retailerId);
           }
+          console.log('[CustomerAuth] Running customer bypass query:', { phoneBypass, retailerId });
           const result = await query.maybeSingle();
+          console.log('[CustomerAuth] Customer bypass result:', result);
           if (isMounted) {
             if (result.data) {
               setCustomer(result.data);
               setUser(null); // No supabase user session
+              console.log('[CustomerAuth] Customer set from bypass:', result.data);
             } else {
               setCustomer(null);
+              setError('No customer found for phone: ' + phoneBypass + (retailerId ? ' and retailer: ' + retailerId : ''));
+              console.error('[CustomerAuth] No customer found for bypass');
             }
             setLoading(false);
           }
@@ -100,6 +108,7 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
           }
           setError('Customer fetch error: ' + (err?.message || 'Unknown error'));
           setLoading(false);
+          console.error('[CustomerAuth] Customer fetch error:', err);
         }
       })();
       return () => { isMounted = false; };
@@ -272,6 +281,11 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
       {error && (
         <div style={{ background: '#fee', color: '#b00', padding: '12px', textAlign: 'center', fontWeight: 'bold', zIndex: 1000 }}>
           {error}
+        </div>
+      )}
+      {!customer && !loading && (
+        <div style={{ background: '#ffc', color: '#b80', padding: '12px', textAlign: 'center', fontWeight: 'bold', zIndex: 1000 }}>
+          No customer profile loaded. Please check your login or contact support.
         </div>
       )}
       {children}
