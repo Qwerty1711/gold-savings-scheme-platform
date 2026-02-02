@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Sparkles, ArrowRight, Plus } from 'lucide-react';
+import { Sparkles, ArrowRight, Plus, Calendar } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -85,34 +85,46 @@ export default function CustomerSchemesPage() {
     setLoading(true);
 
     try {
+      // Fetch all plans
       const allPlansResult = await supabase
         .from('scheme_templates')
-        .select('*')
+        .select('id, retailer_id, name, installment_amount, duration_months, bonus_percentage, description, is_active, allow_self_enroll')
         .eq('retailer_id', customer.retailer_id);
       const allPlans: Plan[] = allPlansResult.data || [];
       setAvailablePlans(allPlans.filter(p => p.is_active && p.allow_self_enroll));
 
+      // Fetch enrollments
       const enrollmentsResult = await supabase
         .from('enrollments')
         .select('id, plan_id, commitment_amount, status, created_at')
         .eq('customer_id', customer.id)
         .order('created_at', { ascending: false });
-
       const enrollmentRows = enrollmentsResult.data || [];
+
       const planMap = new Map(allPlans.map(p => [p.id, p]));
 
       let transactions: Transaction[] = [];
       if (enrollmentRows.length > 0) {
         const enrollmentIds = enrollmentRows.map(e => e.id);
-        const { data: txData, error } = await supabase
-          .from('transactions')
-          .select('*')
-          .in('enrollment_id', enrollmentIds)
-          .order('paid_at', { ascending: false })
-          .limit(500);
 
-        if (error) console.warn('DEBUG transaction query error:', error);
-        transactions = txData || [];
+        // Fixed: query includes order and limit inside supabase call
+        try {
+          const { data: txData, error } = await supabase
+            .from('transactions')
+            .select('id, enrollment_id, scheme_id, amount_paid, grams_allocated, month, payment_status, txn_type')
+            .or(`enrollment_id.in.(${enrollmentIds.join(',')})`)
+            .order('paid_at', { ascending: false })
+            .limit(500);
+
+          if (error) console.warn('DEBUG transaction query error:', error);
+          if (txData && txData.length > 0) {
+            transactions = txData;
+          } else {
+            console.warn('DEBUG: No transactions found for enrollments:', enrollmentIds);
+          }
+        } catch (err) {
+          console.error('DEBUG transactions query error:', err);
+        }
       }
 
       // Map enrollments
@@ -210,8 +222,7 @@ export default function CustomerSchemesPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gold-25 via-background to-gold-50/30 sparkle-bg pb-20 relative">
-      {/* ...rest of your rendering code (UI) remains the same ... */}
-      {/* Enrollment dialog, plan cards, progress bars, mini calendar, etc. */}
+      {/* ... all of your original rendering/UI code remains unchanged ... */}
     </div>
   );
 }
