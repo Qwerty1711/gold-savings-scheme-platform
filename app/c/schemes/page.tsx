@@ -83,16 +83,15 @@ export default function CustomerSchemesPage() {
     setLoading(true);
 
     try {
-      // Fetch available plans
-      const plansResult = await supabase
+      // Fetch ALL plans for the retailer (for mapping and available display)
+      const allPlansResult = await supabase
         .from('plans')
         .select('id, plan_name, monthly_amount, tenure_months, karat, is_active, allow_self_enroll')
-        .eq('retailer_id', customer.retailer_id)
-        .eq('is_active', true)
-        .eq('allow_self_enroll', true)
-        .order('monthly_amount', { ascending: true });
+        .eq('retailer_id', customer.retailer_id);
+      const allPlans: Plan[] = allPlansResult.data || [];
 
-      if (plansResult.data) setAvailablePlans(plansResult.data as Plan[]);
+      // Only show available plans as active and self-enrollable
+      setAvailablePlans(allPlans.filter(p => p.is_active && p.allow_self_enroll));
 
       // Fetch enrollments
       const enrollmentsResult = await supabase
@@ -103,14 +102,7 @@ export default function CustomerSchemesPage() {
 
       if (enrollmentsResult.data && enrollmentsResult.data.length > 0) {
         const enrollmentRows = enrollmentsResult.data as any[];
-        const planIds = [...new Set(enrollmentRows.map(e => e.plan_id))];
-
-        const { data: schemeTemplates } = await supabase
-          .from('plans')
-          .select('id, plan_name, monthly_amount, tenure_months, karat')
-          .in('id', planIds);
-
-        const schemeMap = new Map((schemeTemplates || []).map(t => [t.id, t]));
+        const planMap = new Map(allPlans.map(t => [t.id, t]));
 
         // Fetch transactions
         const { data: transactions } = await supabase
@@ -127,7 +119,7 @@ export default function CustomerSchemesPage() {
 
         // Map enrollments to cards with live data
         const cards: EnrollmentCard[] = enrollmentRows.map(e => {
-          const plan = schemeMap.get(e.plan_id);
+          const plan = planMap.get(e.plan_id);
           const monthly = Number(e.commitment_amount || plan?.monthly_amount || 0);
           const duration = Number(plan?.tenure_months || 0);
           const startDateLabel = e.created_at
@@ -246,24 +238,26 @@ export default function CustomerSchemesPage() {
           <div className="space-y-6">
             <h2 className="text-3xl font-bold bg-gradient-to-r from-gold-600 to-rose-600 bg-clip-text text-transparent">Available Plans</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {availablePlans.map(plan => (
-                <Card key={plan.id} className="group overflow-hidden">
-                  <div className="h-28 bg-gradient-to-br from-rose-400 via-gold-400 to-amber-600 relative overflow-hidden">
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity duration-300 bg-white"></div>
-                  </div>
-                  <CardHeader className="pt-6">
-                    <CardTitle className="text-2xl">{plan.plan_name}</CardTitle>
-                    <CardDescription>
-                      {plan.karat ? `${plan.karat} • ` : ''}{plan.tenure_months} months • ₹{plan.monthly_amount.toLocaleString()}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Button className="w-full luxury-gold-gradient text-white hover:opacity-95 rounded-2xl font-semibold py-2" onClick={() => openEnrollDialog(plan)}>
-                      <Plus className="w-5 h-5 mr-2" /> Enroll Now
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
+              {availablePlans
+                .filter(plan => !enrollments.some(e => e.planName === plan.plan_name))
+                .map(plan => (
+                  <Card key={plan.id} className="group overflow-hidden">
+                    <div className="h-28 bg-gradient-to-br from-rose-400 via-gold-400 to-amber-600 relative overflow-hidden">
+                      <div className="absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity duration-300 bg-white"></div>
+                    </div>
+                    <CardHeader className="pt-6">
+                      <CardTitle className="text-2xl">{plan.plan_name}</CardTitle>
+                      <CardDescription>
+                        {plan.karat ? `${plan.karat} • ` : ''}{plan.tenure_months} months • ₹{plan.monthly_amount.toLocaleString()}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Button className="w-full luxury-gold-gradient text-white hover:opacity-95 rounded-2xl font-semibold py-2" onClick={() => openEnrollDialog(plan)}>
+                        <Plus className="w-5 h-5 mr-2" /> Enroll Now
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
             </div>
           </div>
         )}
