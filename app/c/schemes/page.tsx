@@ -326,7 +326,6 @@ export default function CustomerSchemesPage() {
         </div>
       </div>
     );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gold-25 via-background to-gold-50/30 sparkle-bg pb-20">
