@@ -337,51 +337,17 @@ export default function CustomerSchemesPage() {
       <div className="relative z-10 max-w-6xl mx-auto p-4 md:p-8 space-y-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="space-y-3">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl luxury-gold-gradient flex items-center justify-center shadow-lg">
-                <Gem className="w-8 h-8 text-white" />
-              </div>
-              <div>
-                <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-gold-600 via-gold-500 to-rose-500 bg-clip-text text-transparent">
-                  My Gold Journey
-                </h1>
-                <p className="text-lg text-gold-600/70 font-medium">Welcome, {customer?.full_name}</p>
-              </div>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 w-full">
+            <div className="flex flex-col md:flex-row md:items-center w-full gap-2 md:gap-6">
+              <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-gold-600 via-gold-500 to-rose-500 bg-clip-text text-transparent">
+                My Gold Journey
+              </h1>
+              <p className="text-lg text-gold-600/70 font-medium md:ml-6">Welcome, {customer?.full_name}</p>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link href="/c/notifications">
-              <Button variant="outline" size="icon" className="rounded-2xl border-gold-300/50 hover:bg-gold-50 dark:hover:bg-gold-900/30 relative">
-                <Bell className="w-5 h-5 text-gold-600" />
-                {notifications.length > 0 && (
-                  <span className="absolute -top-2 -right-2 w-6 h-6 bg-rose-500 text-white text-xs font-bold rounded-full flex items-center justify-center shadow-lg">
-                    {notifications.length}
-                  </span>
-                )}
-              </Button>
-            </Link>
-            <Button variant="outline" size="icon" className="rounded-2xl border-gold-300/50 hover:bg-gold-50 dark:hover:bg-gold-900/30" onClick={() => signOut()}>
-              <LogOut className="w-5 h-5 text-gold-600" />
-            </Button>
           </div>
         </div>
 
-        {/* Notifications Alert */}
-        {notifications.length > 0 && (
-          <Card className="border-orange-200/60 bg-gradient-to-r from-orange-50/80 to-orange-50/40 dark:from-orange-900/20 dark:to-orange-900/10 dark:border-orange-700/30">
-            <CardContent className="pt-6">
-              <div className="space-y-3">
-                {notifications.map((notif) => (
-                  <div key={notif.id} className="flex items-start gap-3">
-                    <Bell className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
-                    <p className="text-sm text-orange-800 dark:text-orange-300 font-medium">{notif.message}</p>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {/* ...notifications and signout removed as requested... */}
 
         {/* Available Plans Section */}
         {availablePlans.length > 0 && (
@@ -450,29 +416,36 @@ export default function CustomerSchemesPage() {
                 const progress = Math.min(100, (enrollment.installmentsPaid / duration) * 100);
                 const isActive = enrollment.status === 'ACTIVE';
 
+                // Dynamic message logic
+                let dueMessage = '';
+                if (enrollment.monthlyInstallmentPaid) {
+                  dueMessage = 'Thanks for your timely Payment this month.';
+                } else if (enrollment.daysOverdue && enrollment.daysOverdue > 0) {
+                  dueMessage = 'Your Account is in Due.';
+                } else {
+                  dueMessage = '';
+                }
+
                 return (
-                  <Card key={enrollment.id} className="jewelry-showcase-card overflow-hidden group cursor-pointer" onClick={() => router.push(`/c/passbook/${enrollment.id}`)}>
+                  <Card key={enrollment.id} className="jewelry-showcase-card overflow-hidden group">
                     <div className={`h-32 bg-gradient-to-br ${
                       isActive
                         ? 'from-gold-400 via-gold-500 to-rose-500'
                         : enrollment.monthlyInstallmentPaid
                         ? 'from-emerald-400 via-emerald-500 to-teal-500'
                         : 'from-orange-400 via-orange-500 to-red-500'
-                    } relative overflow-hidden group-hover:shadow-lg transition-shadow`}>
-                      <div className="absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity duration-300 bg-white"></div>
-                      <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+                    } relative overflow-hidden transition-shadow flex flex-col justify-center px-8`}> 
+                      <div className="flex items-center justify-between w-full">
+                        <div>
+                          <span className="text-2xl font-bold text-white drop-shadow-lg">{enrollment.planName}</span>
+                          <span className="ml-4 px-3 py-1 rounded-full bg-gold-900/80 text-gold-100 text-xs font-semibold align-middle">{isActive ? 'Active' : enrollment.status}</span>
+                        </div>
+                        <div className="text-base font-medium text-gold-100/80">Month Started{enrollment.startDateLabel ? `: ${enrollment.startDateLabel}` : ''}</div>
+                      </div>
                     </div>
 
                     <CardHeader className="pb-2">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1">
-                          <CardTitle className="text-2xl">{enrollment.planName}</CardTitle>
-                          <CardDescription className="mt-2 text-base font-medium text-gold-600 dark:text-gold-400">
-                            {enrollment.durationMonths} months{enrollment.startDateLabel ? ` • Started ${enrollment.startDateLabel}` : ''}
-                          </CardDescription>
-                        </div>
-                        <Badge className={`rounded-full font-semibold ${isActive ? 'status-active' : 'status-due'}`}>{enrollment.status}</Badge>
-                      </div>
+                      {/* ...existing card header content removed, now in gold section above... */}
                     </CardHeader>
 
                     <CardContent className="space-y-4">
@@ -508,43 +481,31 @@ export default function CustomerSchemesPage() {
                       </div>
 
                       <div className="p-4 rounded-xl bg-gradient-to-br from-muted/50 to-muted/30 border border-gold-200/30 dark:border-gold-700/20 space-y-2">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground font-medium">This Month:</span>
-                          {enrollment.monthlyInstallmentPaid ? (
-                            <Badge className="status-paid text-xs font-bold rounded-full">✓ Paid</Badge>
-                          ) : enrollment.daysOverdue && enrollment.daysOverdue > 0 ? (
-                            <Badge className="status-missed text-xs font-bold rounded-full">
-                              Overdue ({enrollment.daysOverdue}d)
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-xs">
-                              Due
-                            </Badge>
-                          )}
+                        <div className="flex items-center justify-center text-sm">
+                          <span className="font-medium text-gold-700 dark:text-gold-300">{dueMessage}</span>
                         </div>
-
                         {enrollment.dueDate && (
-                          <div className="text-xs text-muted-foreground">
+                          <div className="text-xs text-muted-foreground text-center">
                             Due: {new Date(enrollment.dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                           </div>
                         )}
                       </div>
 
                       <div className="flex gap-2">
-                        <Link href={`/c/passbook/${enrollment.id}`} className="flex-1">
-                          <Button variant="outline" className="w-full">
-                            <Wallet className="w-4 h-4 mr-2" />
-                            Passbook
-                          </Button>
-                        </Link>
-
-                        {isActive && (
+                        {/* Only show Pay/Top-Up button if active */}
+                        {isActive && !enrollment.monthlyInstallmentPaid && (
                           <Link href={`/c/pay/${enrollment.id}`} className="flex-1">
                             <Button className="w-full gold-gradient text-white hover:opacity-90">
-                              {enrollment.monthlyInstallmentPaid ? 'Top-Up' : 'Pay Now'}
+                              Pay Now
                               <ArrowRight className="w-4 h-4 ml-2" />
                             </Button>
                           </Link>
+                        )}
+                        {isActive && enrollment.monthlyInstallmentPaid && (
+                          <Button className="w-full gold-gradient text-white opacity-70 cursor-not-allowed" disabled>
+                            Top-Up
+                            <ArrowRight className="w-4 h-4 ml-2" />
+                          </Button>
                         )}
                       </div>
                     </CardContent>
