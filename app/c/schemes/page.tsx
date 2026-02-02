@@ -138,39 +138,44 @@ export default function CustomerSchemesPage() {
                   .order('created_at', { ascending: false });
                 console.log('DEBUG enrollmentsResult:', enrollmentsResult.data);
 
+                let enrollmentRows: any[] = [];
+                let planMap: Map<string, any> = new Map();
+                let enrollmentIds: string[] = [];
                 if (enrollmentsResult.data && enrollmentsResult.data.length > 0) {
-                  const enrollmentRows = enrollmentsResult.data as any[];
-                  const planMap = new Map(allPlans.map(t => [t.id, t]));
-                  const enrollmentIds = enrollmentRows.map(e => e.id);
+                  enrollmentRows = enrollmentsResult.data as any[];
+                  planMap = new Map(allPlans.map(t => [t.id, t]));
+                  enrollmentIds = enrollmentRows.map(e => e.id);
+                }
 
-                  // Fetch transactions for these enrollments, matching Pulse logic
-                  let transactions: Transaction[] = [];
-                  if (enrollmentIds.length > 0) {
-                    try {
-                      const { data: txData, error } = await supabase
-                        .from('transactions')
-                        .select('id, enrollment_id, amount_paid, grams_allocated_snapshot, paid_at, txn_type, payment_status, month')
-                        .eq('retailer_id', customer.retailer_id)
-                        .eq('payment_status', 'SUCCESS')
-                        .in('txn_type', ['PRIMARY_INSTALLMENT', 'TOP_UP'])
-                        .in('enrollment_id', enrollmentIds)
-                        .order('paid_at', { ascending: false })
-                        .limit(500);
-                      if (error) {
-                        console.warn('DEBUG transaction query error:', error);
-                      }
-                      if (txData && txData.length > 0) {
-                        transactions = txData;
-                        console.log('DEBUG transactions (pulse logic):', transactions);
-                      } else {
-                        console.warn('DEBUG: No transactions found for enrollments:', enrollmentIds);
-                      }
-                    } catch (err) {
-                      console.error('DEBUG transactions query error:', err);
+                // Fetch transactions for these enrollments, matching Pulse logic
+                let transactions: Transaction[] = [];
+                if (enrollmentIds.length > 0) {
+                  try {
+                    const { data: txData, error } = await supabase
+                      .from('transactions')
+                      .select('id, enrollment_id, amount_paid, grams_allocated_snapshot, paid_at, txn_type, payment_status, month')
+                      .eq('retailer_id', customer.retailer_id)
+                      .eq('payment_status', 'SUCCESS')
+                      .in('txn_type', ['PRIMARY_INSTALLMENT', 'TOP_UP'])
+                      .in('enrollment_id', enrollmentIds)
+                      .order('paid_at', { ascending: false })
+                      .limit(500);
+                    if (error) {
+                      console.warn('DEBUG transaction query error:', error);
                     }
+                    if (txData && txData.length > 0) {
+                      transactions = txData;
+                      console.log('DEBUG transactions (pulse logic):', transactions);
+                    } else {
+                      console.warn('DEBUG: No transactions found for enrollments:', enrollmentIds);
+                    }
+                  } catch (err) {
+                    console.error('DEBUG transactions query error:', err);
                   }
+                }
 
-                  // Map enrollments to cards
+                // Map enrollments to cards
+                if (enrollmentRows.length > 0) {
                   const cards: EnrollmentCard[] = enrollmentRows.map(e => {
                     // Prefer scheme_templates for plan details
                     const plan = e.scheme_templates || planMap.get(e.plan_id);
@@ -219,7 +224,6 @@ export default function CustomerSchemesPage() {
                       transactions: txs,
                     };
                   });
-
                   setEnrollments(cards);
                 }
         p_plan_id: selectedPlan.id,
