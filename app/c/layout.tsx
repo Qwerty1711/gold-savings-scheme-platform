@@ -44,6 +44,7 @@ function CustomerGuard({ children }: { children: React.ReactNode }) {
 }
 
 
+export default function CustomerLayout({ children }: { children: React.ReactNode }) {
   const CustomerTopBar = require('@/components/customer/top-bar').CustomerTopBar;
   const CustomerMobileNav = require('@/components/customer/mobile-nav').CustomerMobileNav;
   const BrandingProvider = require('@/lib/contexts/branding-context').BrandingProvider;
