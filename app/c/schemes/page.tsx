@@ -1,5 +1,4 @@
-
-'use client';
+"use client";
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -29,19 +28,6 @@ export default function CustomerSchemesPage() {
   }
 
   // ...existing code...
-
-import { useEffect, useMemo, useState } from 'react';
-import { Sparkles, ArrowRight, Plus, Calendar } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { supabase } from '@/lib/supabase/client';
-import { useCustomerAuth } from '@/lib/contexts/customer-auth-context';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { toast } from 'sonner';
 
 type Plan = {
   id: string;

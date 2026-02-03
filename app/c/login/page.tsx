@@ -12,12 +12,12 @@ import { Sparkles } from 'lucide-react';
 
 type Retailer = {
   id: string;
-  name: string;
+  business_name: string;
 };
 
 export default function CustomerLoginPage() {
   const router = useRouter();
-  const [retailers, setRetailers] = useState<Retailer[]>([]);
+  const [retailers, setRetailers] = useState<Retailer[] | null>(null);
   const [retailerId, setRetailerId] = useState('');
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,16 +25,16 @@ export default function CustomerLoginPage() {
 
   useEffect(() => {
     async function fetchRetailers() {
-      const { data, error } = await supabase.from('retailers').select('id, name, logo_url').order('name');
+      const { data, error } = await supabase.from('retailers').select('id, business_name').order('business_name');
       if (error) {
         setError('Failed to load retailers');
+        setRetailers([]);
         return;
       }
-        setRetailers(data || []); // Updated to use business_name
+      setRetailers(data || []);
     }
     fetchRetailers();
   }, []);
-
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,6 +63,18 @@ export default function CustomerLoginPage() {
     setLoading(false);
     router.replace('/c/schemes');
   };
+
+  // Show loading state until retailers are loaded
+  if (retailers === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background via-gold-50/20 to-background">
+        <div className="w-full max-w-md flex flex-col items-center justify-center">
+          <AnimatedLogo logoUrl={null} size="lg" showAnimation />
+          <div className="mt-6 text-lg font-bold text-gold-700">Loading retailers…</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background via-gold-50/20 to-background">
@@ -104,8 +116,8 @@ export default function CustomerLoginPage() {
                   required
                 >
                   <option value="" disabled>Select a retailer</option>
-                    {retailers.map(r => ( // Updated to use business_name
-                      <option key={r.id} value={r.id}>{r.business_name}</option>
+                  {retailers.map(r => (
+                    <option key={r.id} value={r.id}>{r.business_name}</option>
                   ))}
                 </select>
               </div>
