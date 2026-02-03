@@ -5,11 +5,14 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AnimatedLogo } from '@/components/ui/animated-logo';
+import { Sparkles } from 'lucide-react';
 
 type Retailer = {
   id: string;
   name: string;
-  logo_url?: string | null;
 };
 
 export default function CustomerLoginPage() {
@@ -19,7 +22,6 @@ export default function CustomerLoginPage() {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedRetailer, setSelectedRetailer] = useState<Retailer | null>(null);
 
   useEffect(() => {
     async function fetchRetailers() {
@@ -28,19 +30,11 @@ export default function CustomerLoginPage() {
         setError('Failed to load retailers');
         return;
       }
-      setRetailers(data || []);
+        setRetailers(data || []); // Updated to use business_name
     }
     fetchRetailers();
   }, []);
 
-  useEffect(() => {
-    if (!retailerId) {
-      setSelectedRetailer(null);
-      return;
-    }
-    const retailer = retailers.find(r => r.id === retailerId) || null;
-    setSelectedRetailer(retailer);
-  }, [retailerId, retailers]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,54 +65,75 @@ export default function CustomerLoginPage() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gold-50 px-4">
-      <div className="w-full max-w-sm bg-white rounded-xl shadow-lg p-6">
-        {/* Branding logo and name for selected retailer */}
-        <div className="flex flex-col items-center mb-4">
-          {selectedRetailer && selectedRetailer.logo_url ? (
-            <img src={selectedRetailer.logo_url} alt={selectedRetailer.name + ' Logo'} className="h-12 mb-2" />
-          ) : (
-            <div className="h-12 mb-2 flex items-center justify-center">
-              <span className="text-gold-700 font-bold text-xl">{selectedRetailer ? selectedRetailer.name : 'Select Retailer'}</span>
-            </div>
-          )}
-          <h1 className="text-2xl font-bold text-center text-gold-700">
-            {selectedRetailer ? selectedRetailer.name : 'Login'}
-          </h1>
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background via-gold-50/20 to-background">
+      <div className="w-full max-w-md space-y-6">
+        {/* Branding header */}
+        <div className="text-center space-y-2">
+          <div className="flex justify-center mb-4">
+            <AnimatedLogo logoUrl={null} size="lg" showAnimation />
+          </div>
+          <div className="rounded-2xl bg-gradient-to-r from-gold-400 via-gold-500 to-gold-600 py-3 px-6">
+            <h1 className="text-2xl font-bold text-white">Jai Rajendra Jewel Palace</h1>
+          </div>
+          <div className="flex justify-center gap-2 text-sm text-muted-foreground mt-2">
+            <Sparkles className="w-4 h-4 text-primary" />
+            <span>Trusted by Jewellers Across India</span>
+          </div>
         </div>
-        {error && (
-          <div className="mb-3 text-red-600 text-center font-medium bg-red-50 rounded p-2">{error}</div>
-        )}
-        <form onSubmit={handleLogin} className="space-y-4">
-          <label className="block text-sm font-medium text-gray-700">Select Retailer</label>
-          <select
-            className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold-500"
-            value={retailerId}
-            onChange={e => setRetailerId(e.target.value)}
-            required
-          >
-            <option value="" disabled>Select a retailer</option>
-            {retailers.map(r => (
-              <option key={r.id} value={r.id}>{r.name}</option>
-            ))}
-          </select>
-          <label className="block text-sm font-medium text-gray-700">Mobile Number</label>
-          <Input
-            type="tel"
-            pattern="[0-9]{10}"
-            maxLength={10}
-            minLength={10}
-            required
-            placeholder="Enter your 10-digit mobile number"
-            value={phone}
-            onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
-            className="mb-2"
-            autoFocus
-          />
-          <Button type="submit" className="w-full" disabled={loading || !retailerId || phone.length !== 10}>
-            {loading ? 'Logging in...' : 'Login'}
-          </Button>
-        </form>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Customer Login</CardTitle>
+            <CardDescription>
+              Enter your registered mobile number to access your account
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleLogin} className="space-y-4">
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Select Retailer</label>
+                <select
+                  className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold-500"
+                  value={retailerId}
+                  onChange={e => setRetailerId(e.target.value)}
+                  required
+                >
+                  <option value="" disabled>Select a retailer</option>
+                    {retailers.map(r => ( // Updated to use business_name
+                      <option key={r.id} value={r.id}>{r.business_name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Mobile Number</label>
+                <Input
+                  type="tel"
+                  pattern="[0-9]{10}"
+                  maxLength={10}
+                  minLength={10}
+                  required
+                  placeholder="Enter your 10-digit mobile number"
+                  value={phone}
+                  onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
+                  className="mb-2"
+                  autoFocus
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={loading || !retailerId || phone.length !== 10}>
+                {loading ? 'Logging in…' : 'Login'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <p className="text-center text-sm text-muted-foreground">
+          © 2026 Jai Rajendra Jewel Palace
+        </p>
       </div>
     </div>
   );

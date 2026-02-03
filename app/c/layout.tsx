@@ -49,17 +49,31 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
   const CustomerMobileNav = require('@/components/customer/mobile-nav').CustomerMobileNav;
   const BrandingProvider = require('@/lib/contexts/branding-context').BrandingProvider;
   const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
-  // Only show nav/topbar if not on login page
   const isLoginPage = pathname === '/c/login';
+  // Only render login page (no nav/top-bar/mobile-nav) until authenticated
+  if (isLoginPage) {
+    return (
+      <CustomerAuthProvider>
+        <AbortErrorBoundary>
+          <CustomerGuard>
+            <BrandingProvider>
+              <div className="min-h-screen">{children}</div>
+            </BrandingProvider>
+          </CustomerGuard>
+        </AbortErrorBoundary>
+      </CustomerAuthProvider>
+    );
+  }
+  // Authenticated: show full layout
   return (
     <CustomerAuthProvider>
       <AbortErrorBoundary>
         <CustomerGuard>
           <BrandingProvider>
             <div className="min-h-screen pb-20 md:pb-0">
-              {!isLoginPage && <CustomerTopBar />}
+              <CustomerTopBar />
               {children}
-              {!isLoginPage && <CustomerMobileNav />}
+              <CustomerMobileNav />
             </div>
           </BrandingProvider>
         </CustomerGuard>
