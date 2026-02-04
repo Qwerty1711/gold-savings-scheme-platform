@@ -112,8 +112,8 @@ export default function CustomerSchemesPage() {
         .eq('retailer_id', customer.retailer_id);
       const allPlans: Plan[] = allPlansResult.data || [];
 
-      // Only show available plans for enrollment (active + self-enroll)
-      setAvailablePlans(allPlans.filter(p => p.is_active && p.allow_self_enroll));
+      // Show all active plans for discovery (enroll button can still respect allow_self_enroll)
+      setAvailablePlans(allPlans.filter(p => p.is_active));
 
       // Fetch enrollments
       const enrollmentsResult = await supabase
@@ -283,7 +283,7 @@ export default function CustomerSchemesPage() {
           if (displayPlans.length > 0) {
             return (
               <div className="space-y-6">
-                <h2 className="text-3xl font-bold bg-gradient-to-r from-gold-600 to-rose-600 bg-clip-text text-transparent">Available Plans</h2>
+                <h2 className="text-3xl font-bold bg-gradient-to-r from-gold-600 to-rose-600 bg-clip-text text-transparent">Grow More with Our Other Plans</h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {displayPlans.map(plan => (
                     <Card key={plan.id} className="group overflow-hidden shadow-xl border-gold-100 hover:scale-[1.02] transition-transform">
@@ -293,15 +293,21 @@ export default function CustomerSchemesPage() {
                       <CardHeader className="pt-6">
                         <CardTitle className="text-2xl font-bold text-gold-700">{plan.name}</CardTitle>
                         <CardDescription className="text-base text-gold-600">
-                          <span className="font-semibold">{plan.duration_months} months</span> • <span className="font-semibold">₹{plan.installment_amount.toLocaleString()}</span>
+                          <span className="font-semibold">{plan.duration_months} months</span> • <span className="font-semibold">₹{plan.installment_amount.toLocaleString()}</span> • <span className="font-semibold">Gold (22K)</span>
                           {plan.bonus_percentage ? <span> • <span className="text-rose-600 font-semibold">Bonus: {plan.bonus_percentage}%</span></span> : ''}
                           {plan.description ? <><br /><span className="text-sm text-gray-500">{plan.description}</span></> : null}
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
-                        <Button className="w-full luxury-gold-gradient text-white hover:opacity-95 rounded-2xl font-semibold py-2 shadow-md" onClick={() => openEnrollDialog(plan)}>
-                          <Plus className="w-5 h-5 mr-2" /> Enroll Now
-                        </Button>
+                        {plan.allow_self_enroll ? (
+                          <Button className="w-full luxury-gold-gradient text-white hover:opacity-95 rounded-2xl font-semibold py-2 shadow-md" onClick={() => openEnrollDialog(plan)}>
+                            <Plus className="w-5 h-5 mr-2" /> Enroll Now
+                          </Button>
+                        ) : (
+                          <Button className="w-full" variant="outline" disabled>
+                            Enrollment via Store
+                          </Button>
+                        )}
                       </CardContent>
                     </Card>
                   ))}
@@ -314,8 +320,8 @@ export default function CustomerSchemesPage() {
                 <div className="w-24 h-24 rounded-full bg-gradient-to-br from-gold-200 via-gold-100 to-rose-100 flex items-center justify-center mb-6">
                   <Sparkles className="w-12 h-12 text-gold-400" />
                 </div>
-                <div className="text-2xl font-bold text-gold-700 mb-2">All Plans Enrolled!</div>
-                <div className="text-md text-muted-foreground">You have already enrolled in all available plans. Check back later for new offers.</div>
+                <div className="text-2xl font-bold text-gold-700 mb-2">No Other Plans Right Now</div>
+                <div className="text-md text-muted-foreground">You’ve already enrolled in all active plans for your store. Check back later for new offers.</div>
               </div>
             );
           }
