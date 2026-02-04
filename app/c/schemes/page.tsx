@@ -60,30 +60,19 @@ type EnrollmentCard = {
 };
 
 export default function CustomerSchemesPage() {
-  // All hooks must be called unconditionally at the top level
   const { branding, loading: brandingLoading } = useBranding();
   const { customer, loading: authLoading } = useCustomerAuth();
   const router = useRouter();
+
+
+  // All hooks must be called unconditionally at the top
   const [enrollments, setEnrollments] = useState<EnrollmentCard[]>([]);
   const [availablePlans, setAvailablePlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
-  const [enrollDialogOpen, setEnrollDialogOpen] = useState(false);
-  const [commitmentAmount, setCommitmentAmount] = useState('');
-  const [enrolling, setEnrolling] = useState(false);
-
-  // Now, do conditional rendering after all hooks
-  if (brandingLoading || authLoading) {
-    return <div className="p-6">Loading...</div>;
-  }
-  if (!branding || !customer) {
-    return <div className="p-6 text-red-500">Missing context</div>;
-  }
   const [enrollDialogOpen, setEnrollDialogOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [commitmentAmount, setCommitmentAmount] = useState('');
   const [enrolling, setEnrolling] = useState(false);
-
   const currentMonthStr = useMemo(() => {
     const today = new Date();
     const m = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -98,6 +87,13 @@ export default function CustomerSchemesPage() {
     }
     void loadData();
   }, [customer]);
+
+  if (brandingLoading || authLoading) {
+    return <div className="p-6">Loading...</div>;
+  }
+  if (!branding || !customer) {
+    return <div className="p-6 text-red-500">Missing context</div>;
+  }
 
   function openEnrollDialog(plan: Plan) {
     setSelectedPlan(plan);
