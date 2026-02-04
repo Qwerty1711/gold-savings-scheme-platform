@@ -131,14 +131,17 @@ export default function CollectionsPage() {
   }, [profile?.retailer_id]);
 
   useEffect(() => {
-    if (selectedCustomerId && goldRate) {
+    if (selectedCustomerId) {
+      setSelectedEnrollmentId('');
+      setMonthlyPaymentInfo(null);
       void loadEnrollments(selectedCustomerId);
       void loadTransactions(selectedCustomerId);
     } else {
       setEnrollments([]);
       setSelectedEnrollmentId('');
+      setMonthlyPaymentInfo(null);
     }
-  }, [selectedCustomerId, goldRate?.id]);
+  }, [selectedCustomerId]);
 
   const selectedEnrollment = useMemo(() => {
     if (!selectedEnrollmentId) return null;
@@ -618,7 +621,7 @@ export default function CollectionsPage() {
             {/* Customer Selection */}
             <div className="space-y-2">
               <Label>Customer *</Label>
-              <Select value={selectedCustomerId || undefined} onValueChange={setSelectedCustomerId}>
+              <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
                 <SelectTrigger>
                   <SelectValue placeholder={loadingCustomers ? 'Loading...' : 'Choose customer'} />
                 </SelectTrigger>
@@ -636,7 +639,7 @@ export default function CollectionsPage() {
             {selectedCustomerId && enrollments.length > 0 && (
               <div className="space-y-2">
                 <Label>Select Plan/Enrollment *</Label>
-                <Select value={selectedEnrollmentId || undefined} onValueChange={setSelectedEnrollmentId}>
+                <Select value={selectedEnrollmentId} onValueChange={setSelectedEnrollmentId}>
                   <SelectTrigger>
                     <SelectValue placeholder="Choose enrolled plan" />
                   </SelectTrigger>
@@ -682,7 +685,7 @@ export default function CollectionsPage() {
             {stores.length > 1 && selectedEnrollmentId && (
               <div className="space-y-2">
                 <Label>Store Collected</Label>
-                <Select value={selectedStore || undefined} onValueChange={setSelectedStore}>
+                <Select value={selectedStore} onValueChange={setSelectedStore}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select store (optional)" />
                   </SelectTrigger>
