@@ -492,7 +492,7 @@ export default function CustomerWalletPage() {
           {/* Enrollment/Plan Selection */}
           <div className="space-y-2">
             <Label>Select Plan/Enrollment *</Label>
-            <Select value={selectedEnrollmentId || undefined} onValueChange={setSelectedEnrollmentId}>
+            <Select value={selectedEnrollmentId} onValueChange={setSelectedEnrollmentId}>
               <SelectTrigger>
                 <SelectValue placeholder="Choose enrolled plan" />
               </SelectTrigger>
@@ -538,7 +538,7 @@ export default function CustomerWalletPage() {
           {stores.length > 1 && selectedEnrollmentId && (
             <div className="space-y-2">
               <Label>Store Collected</Label>
-              <Select value={selectedStore || undefined} onValueChange={setSelectedStore}>
+              <Select value={selectedStore} onValueChange={setSelectedStore}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select store (optional)" />
                 </SelectTrigger>
