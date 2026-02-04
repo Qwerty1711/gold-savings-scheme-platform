@@ -2,6 +2,7 @@
 import React from "react";
 
 import { CustomerAuthProvider, useCustomerAuth } from '@/lib/contexts/customer-auth-context';
+import { Toaster } from '@/components/ui/sonner';
 import { CustomerMobileNav } from '@/components/customer/mobile-nav';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
@@ -62,6 +63,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
           <CustomerGuard>
             <BrandingProvider>
               <div className="min-h-screen">{children}</div>
+              <Toaster position="top-right" richColors />
             </BrandingProvider>
           </CustomerGuard>
         </AbortErrorBoundary>
@@ -79,6 +81,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
               {children}
               <CustomerMobileNav />
             </div>
+            <Toaster position="top-right" richColors />
           </BrandingProvider>
         </CustomerGuard>
       </AbortErrorBoundary>

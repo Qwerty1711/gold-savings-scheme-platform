@@ -1,6 +1,7 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { Activity, ScrollText, Wallet, Gift, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -15,32 +16,29 @@ const navItems = [
 
 export function CustomerMobileNav() {
   const pathname = usePathname();
-  const router = useRouter();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gold-200">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-gradient-to-r from-gold-50/95 via-white/90 to-gold-50/95 border-t border-gold-200/70 shadow-luxury">
       <div className="flex items-center justify-center h-16 px-2">
-        <div className="flex gap-6 md:gap-10 bg-white rounded-2xl px-4 py-2 shadow-lg border border-gold-100">
+        <div className="flex gap-6 md:gap-10 bg-gradient-to-r from-gold-50/90 via-white to-gold-50/90 rounded-2xl px-4 py-2 shadow-[0_10px_30px_rgba(212,175,55,0.18)] border border-gold-200/70">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
 
             return (
-              <button
+              <Link
                 key={`${item.href}-${item.label}`}
-                type="button"
-                onClick={() => router.push(item.href)}
-                aria-current={isActive ? 'page' : undefined}
+                href={item.href}
                 className={cn(
-                  'flex flex-col items-center justify-center gap-1 transition-colors bg-transparent border-0',
+                  'flex flex-col items-center justify-center gap-1 transition-colors',
                   isActive
-                    ? 'text-gold-600'
-                    : 'text-gray-500 hover:text-gold-500'
+                    ? 'text-gold-700'
+                    : 'text-gray-600 hover:text-gold-600'
                 )}
               >
-                <Icon className={cn('w-5 h-5', isActive && 'fill-gold-100')} />
+                <Icon className={cn('w-5 h-5', isActive && 'fill-gold-200')} />
                 <span className="text-xs font-medium">{item.label}</span>
-              </button>
+              </Link>
             );
           })}
         </div>

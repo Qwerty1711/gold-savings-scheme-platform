@@ -131,27 +131,21 @@ export default function CollectionsPage() {
   }, [profile?.retailer_id]);
 
   useEffect(() => {
-    if (selectedCustomerId) {
-      setSelectedEnrollmentId('');
-      setMonthlyPaymentInfo(null);
+    if (selectedCustomerId && goldRate) {
       void loadEnrollments(selectedCustomerId);
       void loadTransactions(selectedCustomerId);
     } else {
       setEnrollments([]);
       setSelectedEnrollmentId('');
-      setMonthlyPaymentInfo(null);
     }
-  }, [selectedCustomerId]);
-
-  const selectedEnrollment = useMemo(() => {
-    if (!selectedEnrollmentId) return null;
-    return enrollments.find(e => e.id === selectedEnrollmentId) || null;
-  }, [selectedEnrollmentId, enrollments]);
+  }, [selectedCustomerId, goldRate?.id]);
 
   // Get the karat for the selected enrollment
   const selectedEnrollmentKarat = useMemo(() => {
-    return selectedEnrollment?.karat || null;
-  }, [selectedEnrollment]);
+    if (!selectedEnrollmentId) return null;
+    const enrollment = enrollments.find(e => e.id === selectedEnrollmentId);
+    return enrollment?.karat || null;
+  }, [selectedEnrollmentId, enrollments]);
 
   // Get the metal name for display (gold vs silver)
   const metalName = useMemo(() => 
@@ -167,19 +161,12 @@ export default function CollectionsPage() {
   }, [selectedEnrollmentKarat, profile?.retailer_id]);
 
   useEffect(() => {
-    if (selectedEnrollment) {
-      if (selectedEnrollment.store_id) {
-        setSelectedStore(selectedEnrollment.store_id);
-      } else if (stores.length === 1) {
-        setSelectedStore(stores[0].id);
-      } else if (!selectedStore) {
-        setSelectedStore('');
-      }
-      void loadMonthlyPaymentInfo(selectedEnrollment.id);
+    if (selectedEnrollmentId) {
+      void loadMonthlyPaymentInfo(selectedEnrollmentId);
     } else {
       setMonthlyPaymentInfo(null);
     }
-  }, [selectedEnrollment, stores, selectedStore]);
+  }, [selectedEnrollmentId]);
 
   const calculatedGrams = useMemo(() => {
     const amountNum = parseFloat(amount);
@@ -410,12 +397,6 @@ export default function CollectionsPage() {
       return;
     }
 
-    const resolvedStoreId = selectedEnrollment?.store_id || selectedStore;
-    if (!resolvedStoreId) {
-      toast.error('Select a store for this payment');
-      return;
-    }
-
     const amountNum = parseFloat(amount);
     if (!Number.isFinite(amountNum) || amountNum <= 0) {
       toast.error('Enter a valid amount');
@@ -460,7 +441,7 @@ export default function CollectionsPage() {
         paid_at: now,
         recorded_at: now,
         source: 'STAFF_OFFLINE',
-        store_id: resolvedStoreId,
+        store_id: selectedStore || null,
       });
 
       if (txnError) throw txnError;
@@ -621,7 +602,7 @@ export default function CollectionsPage() {
             {/* Customer Selection */}
             <div className="space-y-2">
               <Label>Customer *</Label>
-              <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
+              <Select value={selectedCustomerId || undefined} onValueChange={setSelectedCustomerId}>
                 <SelectTrigger>
                   <SelectValue placeholder={loadingCustomers ? 'Loading...' : 'Choose customer'} />
                 </SelectTrigger>
@@ -639,7 +620,7 @@ export default function CollectionsPage() {
             {selectedCustomerId && enrollments.length > 0 && (
               <div className="space-y-2">
                 <Label>Select Plan/Enrollment *</Label>
-                <Select value={selectedEnrollmentId} onValueChange={setSelectedEnrollmentId}>
+                <Select value={selectedEnrollmentId || undefined} onValueChange={setSelectedEnrollmentId}>
                   <SelectTrigger>
                     <SelectValue placeholder="Choose enrolled plan" />
                   </SelectTrigger>
@@ -685,7 +666,7 @@ export default function CollectionsPage() {
             {stores.length > 1 && selectedEnrollmentId && (
               <div className="space-y-2">
                 <Label>Store Collected</Label>
-                <Select value={selectedStore} onValueChange={setSelectedStore}>
+                <Select value={selectedStore || undefined} onValueChange={setSelectedStore}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select store (optional)" />
                   </SelectTrigger>
