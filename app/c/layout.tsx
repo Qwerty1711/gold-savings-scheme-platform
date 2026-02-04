@@ -4,6 +4,8 @@ import React from "react";
 import { CustomerAuthProvider, useCustomerAuth } from '@/lib/contexts/customer-auth-context';
 import { Toaster } from '@/components/ui/sonner';
 import { CustomerMobileNav } from '@/components/customer/mobile-nav';
+import { CustomerTopBar } from '@/components/customer/top-bar';
+import { BrandingProvider } from '@/lib/contexts/branding-context';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 
@@ -46,15 +48,8 @@ function CustomerGuard({ children }: { children: React.ReactNode }) {
 
 
 export default function CustomerLayout({ children }: { children: React.ReactNode }) {
-  const CustomerTopBar = require('@/components/customer/top-bar').CustomerTopBar;
-  const CustomerMobileNav = require('@/components/customer/mobile-nav').CustomerMobileNav;
-  const BrandingProvider = require('@/lib/contexts/branding-context').BrandingProvider;
-  const [mounted, setMounted] = React.useState(false);
-  React.useEffect(() => { setMounted(true); }, []);
-  const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
+  const pathname = usePathname() || '';
   const isLoginPage = pathname === '/c/login';
-  // Hydration guard: only render on client
-  if (!mounted) return null;
   // Only render login page (no nav/top-bar/mobile-nav) until authenticated
   if (isLoginPage) {
     return (

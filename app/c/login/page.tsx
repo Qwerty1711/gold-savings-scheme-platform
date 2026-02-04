@@ -49,25 +49,55 @@ export default function CustomerLoginPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    // Try to find customer by retailer and phone
-    const { data, error } = await supabase
+    const normalizedPhone = phone.replace(/\D/g, '');
+    const phoneCandidates = [
+      normalizedPhone,
+      `+91${normalizedPhone}`,
+      `91${normalizedPhone}`,
+    ].filter(Boolean);
+
+    // Try exact matches against common stored formats
+    let customer = null as any;
+    let { data, error } = await supabase
       .from('customers')
       .select('id, retailer_id, phone, full_name')
       .eq('retailer_id', retailerId)
-      .eq('phone', phone)
+      .in('phone', phoneCandidates)
+      .limit(1)
       .maybeSingle();
+
     if (error) {
       setError('Login failed. Please try again.');
       setLoading(false);
       return;
     }
-    if (!data) {
+    customer = data || null;
+
+    // Fallback: match any phone ending with the 10-digit number (handles spaces or formatting)
+    if (!customer) {
+      const fallback = await supabase
+        .from('customers')
+        .select('id, retailer_id, phone, full_name')
+        .eq('retailer_id', retailerId)
+        .ilike('phone', `%${normalizedPhone}`)
+        .limit(1)
+        .maybeSingle();
+
+      if (fallback.error) {
+        setError('Login failed. Please try again.');
+        setLoading(false);
+        return;
+      }
+      customer = fallback.data || null;
+    }
+
+    if (!customer) {
       setError('No customer found for this retailer and phone number.');
       setLoading(false);
       return;
     }
     // Save bypass info and reload
-    localStorage.setItem('customer_phone_bypass', phone);
+    localStorage.setItem('customer_phone_bypass', normalizedPhone);
     localStorage.setItem('customer_retailer_bypass', retailerId);
     setLoading(false);
     router.replace('/c/schemes');

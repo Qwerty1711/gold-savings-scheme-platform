@@ -66,23 +66,22 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
     // BYPASS: If phone in localStorage, fetch customer by phone, but NOT on /c/login
     if (typeof window !== 'undefined' && window.location.pathname !== '/c/login') {
       const phoneBypass = localStorage.getItem('customer_phone_bypass');
+      const retailerBypass = localStorage.getItem('customer_retailer_bypass');
       if (phoneBypass) {
         (async () => {
           setLoading(true);
           try {
-            // Try to get retailer_id from branding context if available
-            let retailerId = null;
-            try {
-              const { useBranding } = await import('@/lib/contexts/branding-context');
-              retailerId = useBranding()?.branding?.retailer_id || useBranding()?.branding?.id;
-              console.log('[CustomerAuth] Branding context retailerId:', retailerId);
-            } catch (e) {
-              console.warn('[CustomerAuth] Branding context not available:', e);
-            }
+            const normalizedPhone = phoneBypass.replace(/\D/g, '');
+            const phoneCandidates = [
+              normalizedPhone,
+              `+91${normalizedPhone}`,
+              `91${normalizedPhone}`,
+            ].filter(Boolean);
+            const retailerId = retailerBypass || null;
             let query = supabase
               .from('customers')
               .select('id, retailer_id, full_name, phone, email')
-              .eq('phone', phoneBypass);
+              .in('phone', phoneCandidates);
             if (retailerId) {
               query = query.eq('retailer_id', retailerId);
             }
@@ -95,9 +94,25 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
                 setUser(null); // No supabase user session
                 console.log('[CustomerAuth] Customer set from bypass:', result.data);
               } else {
-                setCustomer(null);
-                setError('No customer found for phone: ' + phoneBypass + (retailerId ? ' and retailer: ' + retailerId : ''));
-                console.error('[CustomerAuth] No customer found for bypass');
+                // Fallback: match any phone ending with the 10-digit number
+                let fallbackQuery = supabase
+                  .from('customers')
+                  .select('id, retailer_id, full_name, phone, email')
+                  .ilike('phone', `%${normalizedPhone}`);
+                if (retailerId) {
+                  fallbackQuery = fallbackQuery.eq('retailer_id', retailerId);
+                }
+                const fallback = await fallbackQuery.maybeSingle();
+
+                if (fallback.data) {
+                  setCustomer(fallback.data);
+                  setUser(null);
+                  console.log('[CustomerAuth] Customer set from bypass fallback:', fallback.data);
+                } else {
+                  setCustomer(null);
+                  setError('No customer found for phone: ' + phoneBypass + (retailerId ? ' and retailer: ' + retailerId : ''));
+                  console.error('[CustomerAuth] No customer found for bypass');
+                }
               }
               setLoading(false);
             }
