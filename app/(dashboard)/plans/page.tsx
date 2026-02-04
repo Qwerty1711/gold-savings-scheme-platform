@@ -98,7 +98,6 @@ export default function PlansPage() {
       const normalized = (data || []) as SchemeTemplate[];
       setSchemes(normalized);
 
-      // Load enrollment statistics for each scheme
       await loadSchemeStatistics(normalized);
     } catch (error) {
       console.error('Error loading schemes:', error);
@@ -109,18 +108,6 @@ export default function PlansPage() {
   }
 
   async function loadStores() {
-
-  function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    const timeoutPromise = new Promise<T>((_, reject) => {
-      timeoutId = setTimeout(() => {
-        reject(new Error(`${label} timed out. Please try again.`));
-      }, ms);
-    });
-    return Promise.race([promise, timeoutPromise]).finally(() => {
-      if (timeoutId) clearTimeout(timeoutId);
-    });
-  }
     if (!profile?.retailer_id) return;
 
     try {
@@ -153,14 +140,12 @@ export default function PlansPage() {
 
       if (error) throw error;
 
-      // Count enrollments per scheme
       const statsMap = new Map<string, number>();
       (data || []).forEach((enrollment: any) => {
         const count = statsMap.get(enrollment.plan_id) || 0;
         statsMap.set(enrollment.plan_id, count + 1);
       });
 
-      // Get scheme names
       const stats = (sourceSchemes || []).map(scheme => ({
         id: scheme.id,
         name: scheme.name,
@@ -172,31 +157,23 @@ export default function PlansPage() {
     } catch (error) {
       console.error('Error loading scheme statistics:', error);
     }
-        const { error } = await withTimeout(
-          supabase
-            .from('scheme_templates')
-            .update(schemeData)
-            .eq('id', editingId)
-            .eq('retailer_id', profile.retailer_id),
-          12000,
-          'Update plan'
-        );
+  }
+
+  async function createOrUpdateScheme() {
+    console.log('createOrUpdateScheme called', { profile, newScheme });
+
     if (!profile?.retailer_id) {
       console.error('No retailer_id');
       toast.error('Missing retailer context');
       return;
     }
-    
+
     if (!newScheme.name || !newScheme.installment_amount || !newScheme.duration_months) {
-        await withTimeout(
-          supabase
-            .from('scheme_store_assignments')
-            .delete()
-            .eq('scheme_id', editingId)
-            .eq('retailer_id', profile.retailer_id),
-          12000,
-          'Update store assignments'
-        );
+      console.error('Missing required fields', { newScheme });
+      toast.error('Please fill in all required fields (Name, Amount, Duration)');
+      return;
+    }
+
     if (selectedStoreIds.length === 0) {
       toast.error('Please select at least one store for this plan');
       return;
@@ -204,71 +181,41 @@ export default function PlansPage() {
 
     const installmentAmount = parseFloat(newScheme.installment_amount);
     const durationMonths = parseInt(newScheme.duration_months);
-        const { error: assignError } = await withTimeout(
-          supabase
-            .from('scheme_store_assignments')
-            .insert(storeAssignments),
-          12000,
-          'Create store assignments'
-        );
+    const bonusPercentage = newScheme.bonus_percentage ? parseFloat(newScheme.bonus_percentage) : 0;
+
+    console.log('Parsed values:', { installmentAmount, durationMonths, bonusPercentage });
 
     if (!Number.isFinite(installmentAmount) || installmentAmount <= 0 || !Number.isFinite(durationMonths) || durationMonths <= 0) {
       console.error('Invalid numbers');
       toast.error('Please enter valid positive numbers');
       return;
     }
-        const { data, error } = await withTimeout(
-          supabase
-            .from('scheme_templates')
-            .insert([schemeData])
-            .select('id'),
-          12000,
-          'Create plan'
-        );
+
+    setSaving(true);
+    const watchdog = setTimeout(() => {
+      setSaving(false);
+      toast.error('Request is taking too long. Please check your connection and try again.');
+    }, 15000);
+    try {
+      const schemeData = {
+        retailer_id: profile.retailer_id,
         name: newScheme.name,
         installment_amount: installmentAmount,
         duration_months: durationMonths,
         bonus_percentage: bonusPercentage,
         description: newScheme.description || null,
-        const created = Array.isArray(data) ? data[0] : data;
-
-        let createdId = created?.id;
-        if (!createdId) {
-          const fallback = await withTimeout(
-            supabase
-              .from('scheme_templates')
-              .select('id')
-              .eq('retailer_id', profile.retailer_id)
-              .eq('name', newScheme.name)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .maybeSingle(),
-            12000,
-            'Fetch created plan'
-          );
-          if (fallback.error) throw fallback.error;
-          createdId = fallback.data?.id;
-        }
-
-        if (!createdId) {
-          throw new Error('Plan created but ID could not be retrieved. Please refresh and try again.');
-        }
-        console.log('Plan created successfully:', createdId);
+        metal_type: newScheme.metal_type || 'GOLD',
         benefits: newScheme.benefits || null,
         is_active: true,
       };
 
-          scheme_id: createdId,
+      console.log('Submitting scheme data:', schemeData);
 
       if (editingId) {
         console.log('Updating existing plan:', editingId);
-        const { error: assignError } = await withTimeout(
-          supabase
-            .from('scheme_store_assignments')
-            .insert(storeAssignments),
-          12000,
-          'Create store assignments'
-        );
+        const { error } = await supabase
+          .from('scheme_templates')
+          .update(schemeData)
           .eq('id', editingId)
           .eq('retailer_id', profile.retailer_id);
 
@@ -277,7 +224,6 @@ export default function PlansPage() {
           throw error;
         }
 
-        // Update store assignments: delete old ones, insert new ones
         await supabase
           .from('scheme_store_assignments')
           .delete()
@@ -299,22 +245,36 @@ export default function PlansPage() {
         toast.success(`✅ Plan updated: ${newScheme.name}`);
       } else {
         console.log('Creating new plan');
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('scheme_templates')
-          .insert([schemeData])
-          .select('id')
-          .single();
+          .insert([schemeData], { returning: 'minimal' });
 
         if (error) {
           console.error('Insert error:', error);
           throw error;
         }
-        console.log('Plan created successfully:', data);
 
-        // Insert store assignments
+        const { data: createdRow, error: createdError } = await supabase
+          .from('scheme_templates')
+          .select('id')
+          .eq('retailer_id', profile.retailer_id)
+          .eq('name', newScheme.name)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (createdError) {
+          console.error('Fetch created plan error:', createdError);
+          throw createdError;
+        }
+
+        const createdId = createdRow?.id;
+        if (!createdId) throw new Error('Plan created but ID could not be retrieved.');
+        console.log('Plan created successfully:', createdId);
+
         const storeAssignments = selectedStoreIds.map(storeId => ({
           retailer_id: profile.retailer_id,
-          scheme_id: data.id,
+          scheme_id: createdId,
           store_id: storeId,
         }));
 
@@ -343,6 +303,7 @@ export default function PlansPage() {
       console.error('Final error message:', errorMsg);
       toast.error(`Error: ${errorMsg}`);
     } finally {
+      clearTimeout(watchdog);
       setSaving(false);
     }
   }
@@ -432,7 +393,13 @@ export default function PlansPage() {
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-4 py-4">
+            <form
+              className="space-y-4 py-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void createOrUpdateScheme();
+              }}
+            >
               <div className="space-y-2">
                 <Label>Scheme Name *</Label>
                 <Input
@@ -566,17 +533,12 @@ export default function PlansPage() {
 
               <Button
                 className="w-full gold-gradient text-white font-semibold"
-                onClick={(e) => {
-                  e.preventDefault();
-                  console.log('Button clicked, saving:', saving);
-                  void createOrUpdateScheme();
-                }}
                 disabled={saving}
-                type="button"
+                type="submit"
               >
                 {saving ? 'Creating...' : editingId ? 'Update Plan' : 'Create Plan'}
               </Button>
-            </div>
+            </form>
           </DialogContent>
         </Dialog>
       </div>
