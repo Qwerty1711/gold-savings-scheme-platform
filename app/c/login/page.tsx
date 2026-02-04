@@ -25,6 +25,9 @@ export default function CustomerLoginPage() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // Clear any customer bypass values on login page mount
+    localStorage.removeItem('customer_phone_bypass');
+    localStorage.removeItem('customer_retailer_bypass');
     setMounted(true);
   }, []);
 
