@@ -33,6 +33,8 @@ export default function CustomerLoginPage() {
     lastAction: 'init',
     lastError: null,
   });
+  const [persistedAuthDebug, setPersistedAuthDebug] = useState<Record<string, any> | null>(null);
+  const [persistedAuthError, setPersistedAuthError] = useState<Record<string, any> | null>(null);
 
   useEffect(() => {
     // Clear any customer bypass values on login page mount
@@ -40,6 +42,19 @@ export default function CustomerLoginPage() {
     localStorage.removeItem('customer_retailer_bypass');
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      const storedDebug = localStorage.getItem('customer_auth_debug');
+      const storedError = localStorage.getItem('customer_last_error');
+      setPersistedAuthDebug(storedDebug ? JSON.parse(storedDebug) : null);
+      setPersistedAuthError(storedError ? JSON.parse(storedError) : null);
+    } catch {
+      setPersistedAuthDebug(null);
+      setPersistedAuthError(null);
+    }
+  }, [mounted]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -67,6 +82,18 @@ export default function CustomerLoginPage() {
     fetchRetailers();
   }, [mounted]);
 
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      localStorage.setItem('customer_login_debug', JSON.stringify({
+        ...debugInfo,
+        updatedAt: new Date().toISOString(),
+      }));
+    } catch {
+      // ignore storage errors
+    }
+  }, [debugInfo, mounted]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -79,68 +106,167 @@ export default function CustomerLoginPage() {
       phone: normalizedPhone,
       lastError: null,
     }));
-    const phoneCandidates = [
-      normalizedPhone,
-      `+91${normalizedPhone}`,
-      `91${normalizedPhone}`,
-    ].filter(Boolean);
+    try {
+      const phoneCandidates = [
+        normalizedPhone,
+        `+91${normalizedPhone}`,
+        `91${normalizedPhone}`,
+      ].filter(Boolean);
 
-    // Try exact matches against common stored formats
-    let customer = null as any;
-    let { data, error } = await supabase
-      .from('customers')
-      .select('id, retailer_id, phone, full_name')
-      .eq('retailer_id', retailerId)
-      .or(
-        phoneCandidates
-          .map(candidate => `phone.eq.${candidate}`)
-          .join(',')
-      )
-      .limit(1)
-      .maybeSingle();
-
-    if (error) {
-      const errMsg = formatSupabaseError(error, 'Unknown error');
-      setError('Login failed: ' + errMsg);
-      setLoading(false);
-      setDebugInfo(prev => ({ ...prev, lastAction: 'login:error', lastError: errMsg }));
-      return;
-    }
-    customer = data || null;
-
-    // Fallback: match any phone ending with the 10-digit number (handles spaces or formatting)
-    if (!customer) {
-      const fallback = await supabase
+      // Try exact matches against common stored formats
+      let customer = null as any;
+      let { data, error } = await supabase
         .from('customers')
         .select('id, retailer_id, phone, full_name')
         .eq('retailer_id', retailerId)
-        .or(`phone.ilike.%${normalizedPhone}`)
+        .or(
+          phoneCandidates
+            .map(candidate => `phone.eq.${candidate}`)
+            .join(',')
+        )
         .limit(1)
         .maybeSingle();
 
-      if (fallback.error) {
-        const errMsg = formatSupabaseError(fallback.error, 'Unknown error');
+      if (error) {
+        const errMsg = formatSupabaseError(error, 'Unknown error');
         setError('Login failed: ' + errMsg);
         setLoading(false);
-        setDebugInfo(prev => ({ ...prev, lastAction: 'login:fallback-error', lastError: errMsg }));
+        setDebugInfo(prev => ({
+          ...prev,
+          lastAction: 'login:error',
+          lastError: errMsg,
+          firstQueryError: errMsg,
+        }));
         return;
       }
-      customer = fallback.data || null;
-    }
+      customer = data || null;
+      setDebugInfo(prev => ({
+        ...prev,
+        firstQueryFound: Boolean(customer),
+        firstQueryCustomerId: customer?.id || null,
+      }));
 
-    if (!customer) {
-      setError('No customer found for this retailer and phone number.');
+      // Fallback: match any phone ending with the 10-digit number (handles spaces or formatting)
+      if (!customer) {
+        const fallback = await supabase
+          .from('customers')
+          .select('id, retailer_id, phone, full_name, user_id')
+          .eq('retailer_id', retailerId)
+          .or(`phone.ilike.%${normalizedPhone}`)
+          .limit(1)
+          .maybeSingle();
+
+        if (fallback.error) {
+          const errMsg = formatSupabaseError(fallback.error, 'Unknown error');
+          setError('Login failed: ' + errMsg);
+          setLoading(false);
+          setDebugInfo(prev => ({
+            ...prev,
+            lastAction: 'login:fallback-error',
+            lastError: errMsg,
+            fallbackQueryError: errMsg,
+          }));
+          return;
+        }
+        customer = fallback.data || null;
+        setDebugInfo(prev => ({
+          ...prev,
+          fallbackQueryFound: Boolean(customer),
+          fallbackQueryCustomerId: customer?.id || null,
+        }));
+      }
+
+      // Fallback 2: try user_profiles (CUSTOMER) and map via customer_id
+      if (!customer) {
+        const profileLookup = await supabase
+          .from('user_profiles')
+          .select('id, role, phone, retailer_id, customer_id')
+          .eq('role', 'CUSTOMER')
+          .eq('retailer_id', retailerId)
+          .or(
+            phoneCandidates
+              .map(candidate => `phone.eq.${candidate}`)
+              .join(',')
+          )
+          .limit(1)
+          .maybeSingle();
+
+        if (profileLookup.error) {
+          const errMsg = formatSupabaseError(profileLookup.error, 'Unknown error');
+          setError('Login failed: ' + errMsg);
+          setLoading(false);
+          setDebugInfo(prev => ({
+            ...prev,
+            lastAction: 'login:profile-lookup-error',
+            lastError: errMsg,
+            profileLookupError: errMsg,
+          }));
+          return;
+        }
+
+        setDebugInfo(prev => ({
+          ...prev,
+          profileLookupFound: Boolean(profileLookup.data),
+          profileLookupCustomerId: profileLookup.data?.customer_id || null,
+        }));
+
+        if (profileLookup.data?.customer_id) {
+          const customerByProfile = await supabase
+            .from('customers')
+            .select('id, retailer_id, phone, full_name, user_id')
+            .eq('id', profileLookup.data.customer_id)
+            .maybeSingle();
+
+          if (customerByProfile.error) {
+            const errMsg = formatSupabaseError(customerByProfile.error, 'Unknown error');
+            setError('Login failed: ' + errMsg);
+            setLoading(false);
+            setDebugInfo(prev => ({
+              ...prev,
+              lastAction: 'login:profile-customer-error',
+              lastError: errMsg,
+              profileCustomerError: errMsg,
+            }));
+            return;
+          }
+
+          customer = customerByProfile.data || null;
+          setDebugInfo(prev => ({
+            ...prev,
+            profileCustomerFound: Boolean(customer),
+            profileCustomerId: customer?.id || null,
+          }));
+        } else if (profileLookup.data) {
+          setError('Customer profile found, but customer record is not linked. Run FIX_EXISTING_CUSTOMER_LOGINS.sql.');
+          setLoading(false);
+          setDebugInfo(prev => ({
+            ...prev,
+            lastAction: 'login:profile-missing-customer-id',
+            lastError: 'Missing customer_id in user_profiles',
+          }));
+          return;
+        }
+      }
+
+      if (!customer) {
+        setError('No customer found for this retailer and phone number.');
+        setLoading(false);
+        setDebugInfo(prev => ({ ...prev, lastAction: 'login:not-found', lastError: 'No customer found' }));
+        return;
+      }
+      // Save bypass info and reload
+      localStorage.setItem('customer_phone_bypass', normalizedPhone);
+      localStorage.setItem('customer_retailer_bypass', retailerId);
+      localStorage.setItem('customer_id_bypass', customer.id);
       setLoading(false);
-      setDebugInfo(prev => ({ ...prev, lastAction: 'login:not-found', lastError: 'No customer found' }));
-      return;
+      setDebugInfo(prev => ({ ...prev, lastAction: 'login:success', customerId: customer.id, lastError: null }));
+      router.replace('/c/schemes');
+    } catch (err: any) {
+      const errMsg = formatSupabaseError(err, err?.message || 'Unknown error');
+      setError('Login failed: ' + errMsg);
+      setLoading(false);
+      setDebugInfo(prev => ({ ...prev, lastAction: 'login:exception', lastError: errMsg }));
     }
-    // Save bypass info and reload
-    localStorage.setItem('customer_phone_bypass', normalizedPhone);
-    localStorage.setItem('customer_retailer_bypass', retailerId);
-    localStorage.setItem('customer_id_bypass', customer.id);
-    setLoading(false);
-    setDebugInfo(prev => ({ ...prev, lastAction: 'login:success', customerId: customer.id, lastError: null }));
-    router.replace('/c/schemes');
   };
 
   // Hydration guard: only render on client
@@ -188,9 +314,25 @@ export default function CustomerLoginPage() {
               )}
               <details className="rounded-md border border-gold-100 bg-gold-50/40 px-3 py-2 text-xs text-muted-foreground">
                 <summary className="cursor-pointer text-xs font-medium text-gold-700">Diagnostics</summary>
+                {persistedAuthError && (
+                  <div className="mt-2 rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-700">
+                    <strong>Last auth error:</strong> {persistedAuthError.error}
+                    {persistedAuthError.updatedAt && (
+                      <div>At: {persistedAuthError.updatedAt}</div>
+                    )}
+                    {persistedAuthError.pathname && (
+                      <div>Path: {persistedAuthError.pathname}</div>
+                    )}
+                  </div>
+                )}
                 <pre className="mt-2 whitespace-pre-wrap text-[11px] text-gray-700">
                   {JSON.stringify(debugInfo, null, 2)}
                 </pre>
+                {persistedAuthDebug && (
+                  <pre className="mt-2 whitespace-pre-wrap text-[11px] text-gray-600">
+                    {JSON.stringify(persistedAuthDebug, null, 2)}
+                  </pre>
+                )}
               </details>
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">Select Retailer</label>

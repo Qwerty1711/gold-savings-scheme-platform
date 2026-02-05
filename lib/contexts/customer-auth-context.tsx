@@ -36,7 +36,7 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    (window as any).__customerAuthDebug = {
+    const debugPayload = {
       userId: user?.id || null,
       customerId: customer?.id || null,
       loading,
@@ -45,7 +45,21 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
       phoneBypass: localStorage.getItem('customer_phone_bypass'),
       retailerBypass: localStorage.getItem('customer_retailer_bypass'),
       customerIdBypass: localStorage.getItem('customer_id_bypass'),
+      updatedAt: new Date().toISOString(),
     };
+    (window as any).__customerAuthDebug = debugPayload;
+    try {
+      localStorage.setItem('customer_auth_debug', JSON.stringify(debugPayload));
+      if (error) {
+        localStorage.setItem('customer_last_error', JSON.stringify({
+          error,
+          updatedAt: new Date().toISOString(),
+          pathname: window.location.pathname,
+        }));
+      }
+    } catch {
+      // ignore storage errors
+    }
   }, [user, customer, loading, error]);
 
   // Track hydration - only access browser APIs after mount
@@ -208,12 +222,15 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
       setCustomer(null);
       return;
     }
-    // Prefer phone, fallback to email
+    // Prefer user_id/id match, fallback to phone/email
     let query = supabase
       .from('customers')
-      .select('id, retailer_id, full_name, phone, email')
+      .select('id, retailer_id, full_name, phone, email, user_id')
       .maybeSingle();
-    if (user.phone) {
+
+    if (user.id) {
+      query = query.or(`user_id.eq.${user.id},id.eq.${user.id}`) as any;
+    } else if (user.phone) {
       const normalizedPhone = user.phone.replace(/\D/g, '');
       const phoneCandidates = [
         normalizedPhone,
@@ -231,6 +248,7 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
       setCustomer(null);
       return;
     }
+
     const { data, error } = await query;
     if (error) {
       console.error('Customer hydrate error:', error);

@@ -24,7 +24,7 @@ function CustomerGuard({ children }: { children: React.ReactNode }) {
     // Don't redirect on public routes
     if (isPublicRoute) return;
 
-    if (!loading && !user && !customer) {
+    if (!loading && !user && !customer && !error) {
       console.warn('[CustomerGuard] Redirecting to /c/login', {
         pathname,
         loading,
@@ -55,6 +55,13 @@ function CustomerGuard({ children }: { children: React.ReactNode }) {
   
   // For bypass mode, we only have customer (no user)
   if (!user && !customer) {
+    if (error) {
+      return (
+        <div className="mx-4 mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <strong>Customer auth error:</strong> {error}
+        </div>
+      );
+    }
     return null;
   }
   
