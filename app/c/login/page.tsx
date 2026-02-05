@@ -41,6 +41,15 @@ export default function CustomerLoginPage() {
     localStorage.removeItem('customer_phone_bypass');
     localStorage.removeItem('customer_retailer_bypass');
     localStorage.removeItem('customer_id_bypass');
+    localStorage.removeItem('customer_auth_debug');
+    localStorage.removeItem('customer_last_error');
+    (async () => {
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        // ignore signout errors
+      }
+    })();
     setMounted(true);
   }, []);
 
