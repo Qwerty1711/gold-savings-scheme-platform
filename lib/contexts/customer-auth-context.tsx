@@ -255,16 +255,16 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
       setCustomer(null);
       return;
     }
-    // Prefer user_id/id match, fallback to phone/email
+    // Prefer id match, fallback to phone/email
     let query = supabase
       .from('customers')
-      .select('id, retailer_id, full_name, phone, email, user_id')
+      .select('id, retailer_id, full_name, phone, email')
       .maybeSingle();
 
     if (profileCustomerId) {
       query = query.eq('id', profileCustomerId) as any;
     } else if (user.id) {
-      query = query.or(`user_id.eq.${user.id},id.eq.${user.id}`) as any;
+      query = query.eq('id', user.id) as any;
     } else if (user.phone) {
       const normalizedPhone = user.phone.replace(/\D/g, '');
       const phoneCandidates = [

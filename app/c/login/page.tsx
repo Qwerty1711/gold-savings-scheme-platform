@@ -151,7 +151,7 @@ export default function CustomerLoginPage() {
       if (!customer) {
         const fallback = await supabase
           .from('customers')
-          .select('id, retailer_id, phone, full_name, user_id')
+          .select('id, retailer_id, phone, full_name')
           .eq('retailer_id', retailerId)
           .or(`phone.ilike.%${normalizedPhone}`)
           .limit(1)
@@ -214,7 +214,7 @@ export default function CustomerLoginPage() {
         if (profileLookup.data?.customer_id) {
           const customerByProfile = await supabase
             .from('customers')
-            .select('id, retailer_id, phone, full_name, user_id')
+            .select('id, retailer_id, phone, full_name')
             .eq('id', profileLookup.data.customer_id)
             .maybeSingle();
 
