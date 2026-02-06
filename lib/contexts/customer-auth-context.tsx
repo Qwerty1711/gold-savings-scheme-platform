@@ -17,7 +17,6 @@ type CustomerAuthContextType = {
   user: User | null;
   customer: CustomerProfile | null;
   loading: boolean;
-  error: string | null;
   sendOTP: (phone: string) => Promise<{ success: boolean; error?: string }>;
   verifyOTP: (phone: string, otp: string) => Promise<{ success: boolean; error?: string }>;
   signInWithPhone: (phone: string, pin: string) => Promise<{ success: boolean; error?: string }>;
@@ -33,34 +32,6 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const debugPayload = {
-      userId: user?.id || null,
-      customerId: customer?.id || null,
-      loading,
-      error,
-      pathname: window.location.pathname,
-      phoneBypass: localStorage.getItem('customer_phone_bypass'),
-      retailerBypass: localStorage.getItem('customer_retailer_bypass'),
-      customerIdBypass: localStorage.getItem('customer_id_bypass'),
-      updatedAt: new Date().toISOString(),
-    };
-    (window as any).__customerAuthDebug = debugPayload;
-    try {
-      localStorage.setItem('customer_auth_debug', JSON.stringify(debugPayload));
-      if (error) {
-        localStorage.setItem('customer_last_error', JSON.stringify({
-          error,
-          updatedAt: new Date().toISOString(),
-          pathname: window.location.pathname,
-        }));
-      }
-    } catch {
-      // ignore storage errors
-    }
-  }, [user, customer, loading, error]);
 
   // Track hydration - only access browser APIs after mount
   useEffect(() => {
@@ -84,36 +55,7 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
 
       if (session?.user) {
         try {
-          const { data: profile, error: profileError } = await supabase
-            .from('user_profiles')
-            .select('id, role, customer_id')
-            .eq('id', session.user.id)
-            .maybeSingle();
-
-          if (profileError) {
-            setError('Customer auth profile error: ' + formatSupabaseError(profileError, 'Unknown error'));
-          }
-
-          if (profile && profile.role !== 'CUSTOMER') {
-            const isLoginPage = typeof window !== 'undefined' && window.location.pathname === '/c/login';
-            if (isLoginPage) {
-              try {
-                await supabase.auth.signOut();
-              } catch {
-                // ignore signout errors on login page
-              }
-              setCustomer(null);
-              setUser(null);
-              setLoading(false);
-              return;
-            }
-            setError('You are logged in as ' + profile.role + '. Please sign out and use customer login.');
-            setCustomer(null);
-            setLoading(false);
-            return;
-          }
-
-          await hydrateCustomer(session.user.id, profile?.customer_id || null);
+          await hydrateCustomer(session.user.id);
         } catch (err: any) {
           setError('Customer hydration error: ' + (err?.message || 'Unknown error'));
         }
@@ -124,68 +66,38 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
     // BYPASS: If phone in localStorage, fetch customer by phone, but NOT on /c/login
     if (typeof window !== 'undefined' && window.location.pathname !== '/c/login') {
       const phoneBypass = localStorage.getItem('customer_phone_bypass');
-      const retailerBypass = localStorage.getItem('customer_retailer_bypass');
-      const customerIdBypass = localStorage.getItem('customer_id_bypass');
-      if (phoneBypass || customerIdBypass) {
+      if (phoneBypass) {
         (async () => {
           setLoading(true);
           try {
-            const retailerId = retailerBypass || null;
-            let result = { data: null as any, error: null as any };
-
-            if (customerIdBypass) {
-              let idQuery = supabase
-                .from('customers')
-                .select('id, retailer_id, full_name, phone, email')
-                .eq('id', customerIdBypass);
-              if (retailerId) {
-                idQuery = idQuery.eq('retailer_id', retailerId);
-              }
-              console.log('[CustomerAuth] Running customer bypass by id:', { customerIdBypass, retailerId });
-              result = await idQuery.maybeSingle();
+            // Try to get retailer_id from branding context if available
+            let retailerId = null;
+            try {
+              const { useBranding } = await import('@/lib/contexts/branding-context');
+              retailerId = useBranding()?.branding?.retailer_id || useBranding()?.branding?.id;
+              console.log('[CustomerAuth] Branding context retailerId:', retailerId);
+            } catch (e) {
+              console.warn('[CustomerAuth] Branding context not available:', e);
             }
-
-            if (!result.data && phoneBypass) {
-              const normalizedPhone = phoneBypass.replace(/\D/g, '');
-              const phoneCandidates = [
-                normalizedPhone,
-                `+91${normalizedPhone}`,
-                `91${normalizedPhone}`,
-              ].filter(Boolean);
-              console.log('[CustomerAuth] Running customer bypass query:', { phoneBypass, retailerId });
-              result = await supabase.rpc('lookup_customer_by_phone', {
-                p_phone_candidates: phoneCandidates,
-                p_retailer_id: retailerId || null,
-              });
-              if (result.error) {
-                setError('Customer bypass error: ' + formatSupabaseError(result.error, 'Unknown error'));
-              }
+            let query = supabase
+              .from('customers')
+              .select('id, retailer_id, full_name, phone, email')
+              .eq('phone', phoneBypass);
+            if (retailerId) {
+              query = query.eq('retailer_id', retailerId);
             }
+            console.log('[CustomerAuth] Running customer bypass query:', { phoneBypass, retailerId });
+            const result = await query.maybeSingle();
             console.log('[CustomerAuth] Customer bypass result:', result);
             if (isMounted) {
-              if (Array.isArray(result.data) ? result.data[0] : result.data) {
-                setCustomer(Array.isArray(result.data) ? result.data[0] : result.data);
+              if (result.data) {
+                setCustomer(result.data);
                 setUser(null); // No supabase user session
-                console.log('[CustomerAuth] Customer set from bypass:', Array.isArray(result.data) ? result.data[0] : result.data);
+                console.log('[CustomerAuth] Customer set from bypass:', result.data);
               } else {
-                // Fallback: match any phone ending with the 10-digit number
-                const fallback = await supabase.rpc('lookup_customer_by_phone', {
-                  p_phone_candidates: [normalizedPhone],
-                  p_retailer_id: retailerId || null,
-                });
-                if (fallback.error) {
-                  setError('Customer bypass error: ' + formatSupabaseError(fallback.error, 'Unknown error'));
-                }
-
-                if (Array.isArray(fallback.data) ? fallback.data[0] : fallback.data) {
-                  setCustomer(Array.isArray(fallback.data) ? fallback.data[0] : fallback.data);
-                  setUser(null);
-                  console.log('[CustomerAuth] Customer set from bypass fallback:', Array.isArray(fallback.data) ? fallback.data[0] : fallback.data);
-                } else {
-                  setCustomer(null);
-                  setError('No customer found for phone: ' + phoneBypass + (retailerId ? ' and retailer: ' + retailerId : ''));
-                  console.error('[CustomerAuth] No customer found for bypass');
-                }
+                setCustomer(null);
+                setError('No customer found for phone: ' + phoneBypass + (retailerId ? ' and retailer: ' + retailerId : ''));
+                console.error('[CustomerAuth] No customer found for bypass');
               }
               setLoading(false);
             }
@@ -214,23 +126,7 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
 
         if (session?.user) {
           try {
-            const { data: profile, error: profileError } = await supabase
-              .from('user_profiles')
-              .select('id, role, customer_id')
-              .eq('id', session.user.id)
-              .maybeSingle();
-
-            if (profileError) {
-              setError('Customer auth profile error: ' + formatSupabaseError(profileError, 'Unknown error'));
-            }
-
-            if (profile && profile.role !== 'CUSTOMER') {
-              setError('You are logged in as ' + profile.role + '. Please sign out and use customer login.');
-              setCustomer(null);
-              return;
-            }
-
-            await hydrateCustomer(session.user.id, profile?.customer_id || null);
+            await hydrateCustomer(session.user.id);
           } catch (err: any) {
             setError('Customer hydration error: ' + (err?.message || 'Unknown error'));
           }
@@ -248,46 +144,30 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
   /**
    * Centralized customer hydration
    */
-  const hydrateCustomer = async (userId: string, profileCustomerId?: string | null) => {
+  const hydrateCustomer = async (userId: string) => {
     // Get the current user session to access phone/email
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       setCustomer(null);
       return;
     }
-    // Prefer id match, fallback to phone/email
+    // Prefer phone, fallback to email
     let query = supabase
       .from('customers')
       .select('id, retailer_id, full_name, phone, email')
       .maybeSingle();
-
-    if (profileCustomerId) {
-      query = query.eq('id', profileCustomerId) as any;
-    } else if (user.id) {
-      query = query.eq('id', user.id) as any;
-    } else if (user.phone) {
-      const normalizedPhone = user.phone.replace(/\D/g, '');
-      const phoneCandidates = [
-        normalizedPhone,
-        `+91${normalizedPhone}`,
-        `91${normalizedPhone}`,
-      ].filter(Boolean);
-      query = query.or(
-        phoneCandidates
-          .map(candidate => `phone.eq.${candidate}`)
-          .join(',')
-      ) as any;
+    if (user.phone) {
+      (query as any).eq('phone', user.phone);
     } else if (user.email) {
       (query as any).eq('email', user.email);
     } else {
       setCustomer(null);
       return;
     }
-
     const { data, error } = await query;
     if (error) {
       console.error('Customer hydrate error:', error);
-      setError('Customer hydrate error: ' + formatSupabaseError(error, 'Unknown error'));
+      setError('Customer hydrate error: ' + error.message);
       setCustomer(null);
       return;
     }
@@ -398,7 +278,7 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
 
   return (
     <CustomerAuthContext.Provider
-      value={{ user, customer, loading, error, sendOTP, verifyOTP, signInWithPhone, signOut }}
+      value={{ user, customer, loading, sendOTP, verifyOTP, signInWithPhone, signOut }}
     >
       {/* Only show error if customer is logged in, not on login page */}
       {/* Removed pre-login error banner as per requirements */}
@@ -406,18 +286,6 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
     </CustomerAuthContext.Provider>
   );
 }
-
-// Debug surface for customer auth state
-if (typeof window !== 'undefined') {
-  (window as any).__customerAuthDebug = (window as any).__customerAuthDebug || {};
-}
-
-function formatSupabaseError(err: any, fallback: string) {
-  if (!err) return fallback;
-  const details = [err.message, err.details, err.hint, err.code].filter(Boolean).join(' | ');
-  return details || fallback;
-}
-
 
 /**
  * Safe JSON parser (prevents abort cascades)

@@ -31,22 +31,26 @@ type OverdueEnrollment = {
 };
 
 export default function DuePage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [overdues, setOverdues] = useState<OverdueEnrollment[]>([]);
   const [filtered, setFiltered] = useState<OverdueEnrollment[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [periodFilter, setPeriodFilter] = useState<'ALL' | 'TODAY' | 'WEEK' | 'MONTH' | 'YEAR' | 'RANGE'>('ALL');
+  const [periodStart, setPeriodStart] = useState('');
+  const [periodEnd, setPeriodEnd] = useState('');
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
+    if (authLoading) return;
     if (!user) {
-      router.push('/login');
+      router.replace('/login');
       return;
     }
     void loadOverdues();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, router]);
+  }, [authLoading, user?.id, periodFilter, periodStart, periodEnd]);
 
   useEffect(() => {
     applyFilters();
@@ -61,14 +65,65 @@ export default function DuePage() {
     try {
       // Note: overdue_billing_months view doesn't exist
       // Query enrollment_billing_months directly instead
-      const today = new Date().toISOString().split('T')[0];
-      
-      const { data: billingData, error: billingError } = await supabase
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      const todayISO = now.toISOString().split('T')[0];
+
+      const toDateOnly = (d: Date) => d.toISOString().split('T')[0];
+      const parseDateInput = (value: string) => {
+        if (!value) return null;
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+      };
+
+      let start: Date | null = null;
+      let end: Date | null = null;
+
+      if (periodFilter === 'TODAY') {
+        start = new Date(now);
+        end = new Date(now);
+        end.setDate(end.getDate() + 1);
+      } else if (periodFilter === 'WEEK') {
+        end = new Date(now);
+        end.setDate(end.getDate() + 1);
+        start = new Date(now);
+        start.setDate(start.getDate() - 6);
+      } else if (periodFilter === 'MONTH') {
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      } else if (periodFilter === 'YEAR') {
+        start = new Date(now.getFullYear(), 0, 1);
+        end = new Date(now.getFullYear() + 1, 0, 1);
+      } else if (periodFilter === 'RANGE') {
+        const s = parseDateInput(periodStart);
+        const e = parseDateInput(periodEnd);
+        if (s && e) {
+          start = s;
+          end = new Date(e);
+          end.setDate(end.getDate() + 1);
+        }
+      }
+
+      let query = supabase
         .from('enrollment_billing_months')
         .select('enrollment_id, billing_month, due_date, status, retailer_id')
         .eq('primary_paid', false)
-        .lt('due_date', today)
         .order('due_date', { ascending: true });
+
+      if (periodFilter === 'ALL') {
+        query = query.lt('due_date', todayISO);
+      } else if (start && end) {
+        const endLimit = new Date(now);
+        endLimit.setDate(endLimit.getDate() + 1);
+        const effectiveEnd = end < endLimit ? end : endLimit;
+        query = query
+          .gte('due_date', toDateOnly(start))
+          .lt('due_date', toDateOnly(effectiveEnd));
+      } else {
+        query = query.lt('due_date', todayISO);
+      }
+
+      const { data: billingData, error: billingError } = await query;
 
       if (billingError) throw billingError;
 
@@ -195,7 +250,7 @@ export default function DuePage() {
     }
   }
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-pulse text-xl">Loading...</div>
@@ -205,9 +260,42 @@ export default function DuePage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-gold-600 via-gold-500 to-rose-500 bg-clip-text text-transparent">Due & Overdue Payments</h1>
-        <p className="text-muted-foreground">Track and manage customer payment dues</p>
+      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-gold-600 via-gold-500 to-rose-500 bg-clip-text text-transparent">Due & Overdue Payments</h1>
+          <p className="text-muted-foreground">Track and manage customer payment dues</p>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="space-y-1">
+            <Label>Period</Label>
+            <Select value={periodFilter} onValueChange={(value) => setPeriodFilter(value as typeof periodFilter)}>
+              <SelectTrigger className="w-[170px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="TODAY">Today</SelectItem>
+                <SelectItem value="WEEK">Last 7 Days</SelectItem>
+                <SelectItem value="MONTH">This Month</SelectItem>
+                <SelectItem value="YEAR">This Year</SelectItem>
+                <SelectItem value="RANGE">Custom Range</SelectItem>
+                <SelectItem value="ALL">All Time</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {periodFilter === 'RANGE' && (
+            <div className="flex items-end gap-2">
+              <div className="space-y-1">
+                <Label>From</Label>
+                <Input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <Label>To</Label>
+                <Input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

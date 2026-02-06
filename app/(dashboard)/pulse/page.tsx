@@ -200,6 +200,12 @@ export default function PulseDashboard() {
         return { s, e };
       };
 
+      const parseDateInput = (value: string, fallback: Date) => {
+        if (!value) return fallback;
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ? fallback : parsed;
+      };
+
       if (timeFilter === 'DAY') {
         startISO = toISO(startOfDayUTC);
         endISO = toISO(endOfDayUTC);
@@ -213,10 +219,18 @@ export default function PulseDashboard() {
         const { s, e } = startOfYearUTC(now);
         startISO = toISO(s); endISO = toISO(e);
       } else {
-        const s = customStart ? new Date(customStart) : startOfDayUTC;
-        const e = customEnd ? new Date(customEnd) : endOfDayUTC;
+        const s = parseDateInput(customStart, startOfDayUTC);
+        const rawEnd = parseDateInput(customEnd, endOfDayUTC);
+        const endExclusive = customEnd
+          ? new Date(Date.UTC(rawEnd.getUTCFullYear(), rawEnd.getUTCMonth(), rawEnd.getUTCDate() + 1, 0, 0, 0, 0))
+          : endOfDayUTC;
+
+        const safeEnd = endExclusive <= s
+          ? new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate() + 1, 0, 0, 0, 0))
+          : endExclusive;
+
         startISO = toISO(s);
-        endISO = toISO(e);
+        endISO = toISO(safeEnd);
       }
 
       todayDateISO = startOfDayUTC.toISOString().split('T')[0];

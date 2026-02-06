@@ -2,10 +2,7 @@
 import React from "react";
 
 import { CustomerAuthProvider, useCustomerAuth } from '@/lib/contexts/customer-auth-context';
-import { Toaster } from '@/components/ui/sonner';
 import { CustomerMobileNav } from '@/components/customer/mobile-nav';
-import { CustomerTopBar } from '@/components/customer/top-bar';
-import { BrandingProvider } from '@/lib/contexts/branding-context';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 
@@ -13,7 +10,7 @@ import { useEffect } from 'react';
 const PUBLIC_ROUTES = ['/c/login', '/c/register', '/c/forgot-pin'];
 
 function CustomerGuard({ children }: { children: React.ReactNode }) {
-  const { user, customer, loading, error } = useCustomerAuth();
+  const { user, customer, loading } = useCustomerAuth();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -24,29 +21,14 @@ function CustomerGuard({ children }: { children: React.ReactNode }) {
     // Don't redirect on public routes
     if (isPublicRoute) return;
 
-    if (!loading && !user && !customer && !error) {
-      console.warn('[CustomerGuard] Redirecting to /c/login', {
-        pathname,
-        loading,
-        userId: user?.id || null,
-        customerId: customer?.id || null,
-      });
+    if (!loading && !user && !customer) {
       router.push('/c/login');
     }
   }, [user, customer, loading, router, isPublicRoute]);
 
   // Public routes render immediately without auth check
   if (isPublicRoute) {
-    return (
-      <>
-        {error && (
-          <div className="mx-4 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            <strong>Customer auth error:</strong> {error}
-          </div>
-        )}
-        {children}
-      </>
-    );
+    return <>{children}</>;
   }
 
   if (loading) {
@@ -55,32 +37,23 @@ function CustomerGuard({ children }: { children: React.ReactNode }) {
   
   // For bypass mode, we only have customer (no user)
   if (!user && !customer) {
-    if (error) {
-      return (
-        <div className="mx-4 mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          <strong>Customer auth error:</strong> {error}
-        </div>
-      );
-    }
     return null;
   }
   
-  return (
-    <>
-      {error && (
-        <div className="mx-4 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          <strong>Customer auth error:</strong> {error}
-        </div>
-      )}
-      {children}
-    </>
-  );
+  return <>{children}</>;
 }
 
 
 export default function CustomerLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname() || '';
+  const CustomerTopBar = require('@/components/customer/top-bar').CustomerTopBar;
+  const CustomerMobileNav = require('@/components/customer/mobile-nav').CustomerMobileNav;
+  const BrandingProvider = require('@/lib/contexts/branding-context').BrandingProvider;
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => { setMounted(true); }, []);
+  const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
   const isLoginPage = pathname === '/c/login';
+  // Hydration guard: only render on client
+  if (!mounted) return null;
   // Only render login page (no nav/top-bar/mobile-nav) until authenticated
   if (isLoginPage) {
     return (
@@ -89,7 +62,6 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
           <CustomerGuard>
             <BrandingProvider>
               <div className="min-h-screen">{children}</div>
-              <Toaster position="top-right" richColors />
             </BrandingProvider>
           </CustomerGuard>
         </AbortErrorBoundary>
@@ -107,7 +79,6 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
               {children}
               <CustomerMobileNav />
             </div>
-            <Toaster position="top-right" richColors />
           </BrandingProvider>
         </CustomerGuard>
       </AbortErrorBoundary>

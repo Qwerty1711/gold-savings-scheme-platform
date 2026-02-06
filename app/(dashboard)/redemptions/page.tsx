@@ -403,7 +403,8 @@ export default function RedemptionsPage() {
     if (!start || !end) return redemptions;
 
     return redemptions.filter((r) => {
-      const date = r.redemption_date ? new Date(r.redemption_date) : null;
+      const dateValue = r.redemption_date || r.processed_at;
+      const date = dateValue ? new Date(dateValue) : null;
       if (!date) return false;
       return date >= start && date < end;
     });
