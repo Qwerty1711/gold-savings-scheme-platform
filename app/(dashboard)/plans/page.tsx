@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/contexts/auth-context';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -26,8 +25,6 @@ type SchemeTemplate = {
   duration_months: number;
   bonus_percentage: number;
   description?: string | null;
-  metal_type?: string | null;
-  benefits?: string | null;
   is_active: boolean;
   allow_self_enroll?: boolean;
 };
@@ -73,8 +70,6 @@ export default function PlansPage() {
     duration_months: '',
     bonus_percentage: '',
     description: '',
-    metal_type: 'GOLD',
-    benefits: '',
   });
 
   useEffect(() => {
@@ -90,7 +85,7 @@ export default function PlansPage() {
     try {
       const { data, error } = await supabase
         .from('scheme_templates')
-        .select('id, name, installment_amount, duration_months, bonus_percentage, description, metal_type, benefits, is_active, allow_self_enroll')
+        .select('id, name, installment_amount, duration_months, bonus_percentage, description, is_active, allow_self_enroll')
         .eq('retailer_id', profile.retailer_id)
         .order('created_at', { ascending: false });
 
@@ -98,6 +93,7 @@ export default function PlansPage() {
       const normalized = (data || []) as SchemeTemplate[];
       setSchemes(normalized);
 
+      // Load enrollment statistics for each scheme
       await loadSchemeStatistics(normalized);
     } catch (error) {
       console.error('Error loading schemes:', error);
@@ -140,12 +136,14 @@ export default function PlansPage() {
 
       if (error) throw error;
 
+      // Count enrollments per scheme
       const statsMap = new Map<string, number>();
       (data || []).forEach((enrollment: any) => {
         const count = statsMap.get(enrollment.plan_id) || 0;
         statsMap.set(enrollment.plan_id, count + 1);
       });
 
+      // Get scheme names
       const stats = (sourceSchemes || []).map(scheme => ({
         id: scheme.id,
         name: scheme.name,
@@ -161,13 +159,13 @@ export default function PlansPage() {
 
   async function createOrUpdateScheme() {
     console.log('createOrUpdateScheme called', { profile, newScheme });
-
+    
     if (!profile?.retailer_id) {
       console.error('No retailer_id');
       toast.error('Missing retailer context');
       return;
     }
-
+    
     if (!newScheme.name || !newScheme.installment_amount || !newScheme.duration_months) {
       console.error('Missing required fields', { newScheme });
       toast.error('Please fill in all required fields (Name, Amount, Duration)');
@@ -192,10 +190,6 @@ export default function PlansPage() {
     }
 
     setSaving(true);
-    const watchdog = setTimeout(() => {
-      setSaving(false);
-      toast.error('Request is taking too long. Please check your connection and try again.');
-    }, 15000);
     try {
       const schemeData = {
         retailer_id: profile.retailer_id,
@@ -204,8 +198,6 @@ export default function PlansPage() {
         duration_months: durationMonths,
         bonus_percentage: bonusPercentage,
         description: newScheme.description || null,
-        metal_type: newScheme.metal_type || 'GOLD',
-        benefits: newScheme.benefits || null,
         is_active: true,
       };
 
@@ -224,6 +216,7 @@ export default function PlansPage() {
           throw error;
         }
 
+        // Update store assignments: delete old ones, insert new ones
         await supabase
           .from('scheme_store_assignments')
           .delete()
@@ -245,36 +238,22 @@ export default function PlansPage() {
         toast.success(`✅ Plan updated: ${newScheme.name}`);
       } else {
         console.log('Creating new plan');
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('scheme_templates')
-          .insert([schemeData], { returning: 'minimal' });
+          .insert([schemeData])
+          .select('id')
+          .single();
 
         if (error) {
           console.error('Insert error:', error);
           throw error;
         }
+        console.log('Plan created successfully:', data);
 
-        const { data: createdRow, error: createdError } = await supabase
-          .from('scheme_templates')
-          .select('id')
-          .eq('retailer_id', profile.retailer_id)
-          .eq('name', newScheme.name)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (createdError) {
-          console.error('Fetch created plan error:', createdError);
-          throw createdError;
-        }
-
-        const createdId = createdRow?.id;
-        if (!createdId) throw new Error('Plan created but ID could not be retrieved.');
-        console.log('Plan created successfully:', createdId);
-
+        // Insert store assignments
         const storeAssignments = selectedStoreIds.map(storeId => ({
           retailer_id: profile.retailer_id,
-          scheme_id: createdId,
+          scheme_id: data.id,
           store_id: storeId,
         }));
 
@@ -290,12 +269,12 @@ export default function PlansPage() {
         toast.success(`✅ Plan created: ${newScheme.name}`);
       }
 
-      setNewScheme({ name: '', installment_amount: '', duration_months: '', bonus_percentage: '', description: '', metal_type: 'GOLD', benefits: '' });
+      setNewScheme({ name: '', installment_amount: '', duration_months: '', bonus_percentage: '', description: '' });
       setSelectedStoreIds([]);
       setEditingId(null);
       setDialogOpen(false);
       console.log('Reloading schemes after save...');
-      void loadSchemes();
+      await loadSchemes();
       console.log('Schemes reloaded');
     } catch (error: any) {
       console.error('Error saving scheme:', error);
@@ -303,7 +282,6 @@ export default function PlansPage() {
       console.error('Final error message:', errorMsg);
       toast.error(`Error: ${errorMsg}`);
     } finally {
-      clearTimeout(watchdog);
       setSaving(false);
     }
   }
@@ -335,8 +313,6 @@ export default function PlansPage() {
       duration_months: scheme.duration_months.toString(),
       bonus_percentage: scheme.bonus_percentage.toString(),
       description: scheme.description || '',
-      metal_type: scheme.metal_type || 'GOLD',
-      benefits: scheme.benefits || '',
     });
 
     // Load existing store assignments for this scheme
@@ -362,7 +338,7 @@ export default function PlansPage() {
   function resetForm() {
     setEditingId(null);
     setSelectedStoreIds([]);
-    setNewScheme({ name: '', installment_amount: '', duration_months: '', bonus_percentage: '', description: '', metal_type: 'GOLD', benefits: '' });
+    setNewScheme({ name: '', installment_amount: '', duration_months: '', bonus_percentage: '', description: '' });
   }
 
   return (
@@ -393,13 +369,7 @@ export default function PlansPage() {
               </DialogDescription>
             </DialogHeader>
 
-            <form
-              className="space-y-4 py-4"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void createOrUpdateScheme();
-              }}
-            >
+            <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label>Scheme Name *</Label>
                 <Input
@@ -430,22 +400,6 @@ export default function PlansPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Metal Type *</Label>
-                <Select
-                  value={newScheme.metal_type}
-                  onValueChange={(value) => setNewScheme({ ...newScheme, metal_type: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select metal" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="GOLD">Gold</SelectItem>
-                    <SelectItem value="SILVER">Silver</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
                 <Label>Bonus Percentage (%) (Optional)</Label>
                 <Input
                   type="number"
@@ -462,16 +416,6 @@ export default function PlansPage() {
                   placeholder="Add plan details or terms"
                   value={newScheme.description}
                   onChange={(e) => setNewScheme({ ...newScheme, description: e.target.value })}
-                  rows={3}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Benefits (Optional)</Label>
-                <Textarea
-                  placeholder="Add benefits (e.g., bonus gold, discounts, gifts)"
-                  value={newScheme.benefits}
-                  onChange={(e) => setNewScheme({ ...newScheme, benefits: e.target.value })}
                   rows={3}
                 />
               </div>
@@ -533,12 +477,17 @@ export default function PlansPage() {
 
               <Button
                 className="w-full gold-gradient text-white font-semibold"
+                onClick={(e) => {
+                  e.preventDefault();
+                  console.log('Button clicked, saving:', saving);
+                  void createOrUpdateScheme();
+                }}
                 disabled={saving}
-                type="submit"
+                type="button"
               >
                 {saving ? 'Creating...' : editingId ? 'Update Plan' : 'Create Plan'}
               </Button>
-            </form>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
@@ -617,11 +566,6 @@ export default function PlansPage() {
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="text-lg font-bold">{scheme.name}</h3>
-                        {scheme.metal_type && (
-                          <Badge variant="outline" className="text-xs">
-                            {scheme.metal_type === 'SILVER' ? 'Silver' : 'Gold'}
-                          </Badge>
-                        )}
                         {scheme.is_active ? (
                           <Badge className="status-active">Active</Badge>
                         ) : (
@@ -648,11 +592,6 @@ export default function PlansPage() {
                       </div>
                       {scheme.description && (
                         <p className="text-sm text-muted-foreground mt-2">{scheme.description}</p>
-                      )}
-                      {scheme.benefits && (
-                        <p className="text-sm text-muted-foreground mt-1">
-                          <span className="font-medium text-foreground">Benefits:</span> {scheme.benefits}
-                        </p>
                       )}
                     </div>
                     <div className="flex gap-2">

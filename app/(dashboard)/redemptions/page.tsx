@@ -231,7 +231,7 @@ export default function RedemptionsPage() {
   }
 
   async function processRedemption() {
-    if (!selectedEnrollment || !profile?.id) return;
+    if (!selectedEnrollment || !profile?.id || processing) return;
 
     setProcessing(true);
     try {
@@ -240,65 +240,43 @@ export default function RedemptionsPage() {
       const grams = selectedEnrollment.total_grams;
       const value = grams * rate;
 
-      // Prepare redemption data
-      const redemptionData: any = {
-        retailer_id: profile.retailer_id,
-        customer_id: selectedEnrollment.customer_id,
-        enrollment_id: selectedEnrollment.id,
-        redemption_type: 'FULL',
-        redemption_status: 'COMPLETED',
-        payment_method: paymentMethod,
-        notes,
-        processed_by: profile.id,
-        processed_at: new Date().toISOString(),
-        total_redemption_value: value,
+      const redemptionPayload = {
+        p_retailer_id: profile.retailer_id,
+        p_customer_id: selectedEnrollment.customer_id,
+        p_enrollment_id: selectedEnrollment.id,
+        p_redemption_type: 'FULL',
+        p_redemption_status: 'COMPLETED',
+        p_payment_method: paymentMethod,
+        p_notes: notes,
+        p_processed_by: profile.id,
+        p_processed_at: new Date().toISOString(),
+        p_total_redemption_value: value,
+        p_gold_18k_grams: karat === '18K' ? grams : 0,
+        p_gold_22k_grams: karat === '22K' ? grams : 0,
+        p_gold_24k_grams: karat === '24K' ? grams : 0,
+        p_silver_grams: karat === 'SILVER' ? grams : 0,
+        p_rate_18k_per_gram: karat === '18K' ? rate : null,
+        p_rate_22k_per_gram: karat === '22K' ? rate : null,
+        p_rate_24k_per_gram: karat === '24K' ? rate : null,
+        p_rate_silver_per_gram: karat === 'SILVER' ? rate : null,
+        p_total_value_18k: karat === '18K' ? value : 0,
+        p_total_value_22k: karat === '22K' ? value : 0,
+        p_total_value_24k: karat === '24K' ? value : 0,
+        p_total_value_silver: karat === 'SILVER' ? value : 0,
+        p_delivery_address: deliveryAddress || null,
+        p_bank_details: null,
       };
 
-      // Set grams and rate based on karat
-      if (karat === '18K') {
-        redemptionData.gold_18k_grams = grams;
-        redemptionData.rate_18k_per_gram = rate;
-        redemptionData.total_value_18k = value;
-      } else if (karat === '22K') {
-        redemptionData.gold_22k_grams = grams;
-        redemptionData.rate_22k_per_gram = rate;
-        redemptionData.total_value_22k = value;
-      } else if (karat === '24K') {
-        redemptionData.gold_24k_grams = grams;
-        redemptionData.rate_24k_per_gram = rate;
-        redemptionData.total_value_24k = value;
-      } else if (karat === 'SILVER') {
-        redemptionData.silver_grams = grams;
-        redemptionData.rate_silver_per_gram = rate;
-        redemptionData.total_value_silver = value;
-      }
-
-      redemptionData.delivery_address = deliveryAddress;
-
-      // Insert redemption record
-      const { error: redemptionError } = await supabase
-        .from('redemptions')
-        .insert(redemptionData);
+      const { data: redemptionResult, error: redemptionError } = await supabase
+        .rpc('process_redemption', redemptionPayload)
+        .single();
 
       if (redemptionError) throw redemptionError;
 
-      // Update enrollment status
-      const { error: updateError } = await supabase
-        .from('enrollments')
-        .update({
-          redemption_status: 'COMPLETED',
-          status: 'COMPLETED',
-        })
-        .eq('id', selectedEnrollment.id);
-
-      if (updateError) throw updateError;
-
-      const { error: customerUpdateError } = await supabase
-        .from('customers')
-        .update({ status: 'INACTIVE' })
-        .eq('id', selectedEnrollment.customer_id);
-
-      if (customerUpdateError) throw customerUpdateError;
+      if (!redemptionResult?.created) {
+        toast.error('Redemption already exists for this enrollment');
+        return;
+      }
 
       toast.success('Redemption processed successfully');
       setProcessDialog(false);

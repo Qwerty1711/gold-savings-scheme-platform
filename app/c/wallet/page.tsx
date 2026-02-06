@@ -181,7 +181,7 @@ export default function CustomerWalletPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-gold-50/10 to-background sparkle-bg">
-      <div className="sticky top-0 z-50 backdrop-blur-xl bg-gradient-to-r from-gold-50/90 via-white/95 to-gold-50/90 dark:from-gold-900/40 dark:via-zinc-900/90 dark:to-gold-900/40 border-b border-gold-300/40 dark:border-gold-700/40 shadow-luxury">
+      <div className="sticky top-0 z-50 backdrop-blur-xl bg-white/80 dark:bg-zinc-900/80 border-b border-gold-200/30 dark:border-gold-600/30">
         <div className="flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl jewel-gradient flex items-center justify-center">
@@ -243,7 +243,7 @@ export default function CustomerWalletPage() {
         </Card>
 
         {wallet?.nextDue && (
-          <Card className="jewel-card border-2 border-orange-200 bg-gradient-to-br from-orange-50/80 to-white dark:from-orange-900/20 dark:to-zinc-900">
+          <Card className="border-2 border-orange-200 bg-gradient-to-br from-orange-50/80 to-white dark:from-orange-900/20 dark:to-zinc-900">
             <CardContent className="pt-6">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-2xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center flex-shrink-0">
@@ -311,7 +311,7 @@ export default function CustomerWalletPage() {
           )}
         </div>
 
-        <Card className="jewel-card bg-gradient-to-br from-gold-50/60 to-white dark:from-gold-900/20 dark:to-zinc-900 border-gold-200/60">
+        <Card className="bg-gradient-to-br from-gold-50/50 to-white dark:from-gold-900/10 dark:to-zinc-900 border-gold-200/50">
           <CardContent className="pt-6">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-xl bg-gold-100 dark:bg-gold-900/30 flex items-center justify-center flex-shrink-0">

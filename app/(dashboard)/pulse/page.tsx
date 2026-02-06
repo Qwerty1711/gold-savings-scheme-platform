@@ -47,6 +47,8 @@ type DashboardMetrics = {
   overdueCount: number;
   newEnrollmentsPeriod: number;
   activeCustomers: number;
+  planAmountTotal: number;
+  totalActiveEnrollmentsAllTime: number;
   currentRates: {
     k18: { rate: number; validFrom: string } | null;
     k22: { rate: number; validFrom: string } | null;
@@ -225,12 +227,13 @@ export default function PulseDashboard() {
         rate24Result,
         rateSilverResult,
         txnsResult,
-        redemptionsResult,
         duesResult,
         overdueResult,
         enrollmentsResult,
         customersCount,
         staffResult,
+        activeEnrollmentsAll,
+        schemesAll,
       ] = await Promise.all([
         supabase
           .from('gold_rates')
@@ -274,16 +277,6 @@ export default function PulseDashboard() {
           .lt('paid_at', endISO)
           .limit(1000), // Lower limit for faster dashboard
         supabase
-          .from('redemptions')
-          .select(
-            'redemption_date, redemption_status, gold_18k_grams, gold_22k_grams, gold_24k_grams, silver_grams, total_value_18k, total_value_22k, total_value_24k, total_value_silver'
-          )
-          .eq('retailer_id', retailerId)
-          .eq('redemption_status', 'COMPLETED')
-          .gte('redemption_date', startISO)
-          .lt('redemption_date', endISO)
-          .limit(1000),
-        supabase
           .from('enrollment_billing_months')
           .select('enrollment_id')
           .eq('retailer_id', retailerId)
@@ -308,6 +301,17 @@ export default function PulseDashboard() {
           .limit(500),
         safeCountCustomers(retailerId),
         supabase.rpc('get_staff_leaderboard', { period_days: 30 }),
+        supabase
+          .from('enrollments')
+          .select('id, plan_id, status')
+          .eq('retailer_id', retailerId)
+          .eq('status', 'ACTIVE')
+          .limit(500),
+        supabase
+          .from('scheme_templates')
+          .select('id, installment_amount, duration_months')
+          .eq('retailer_id', retailerId)
+          .limit(100),
       ]);
 
       // Log any errors from the parallel queries
@@ -316,10 +320,11 @@ export default function PulseDashboard() {
       if (rate24Result.error) console.error('Gold rate 24K error:', rate24Result.error);
       if (rateSilverResult.error) console.error('Silver rate error:', rateSilverResult.error);
       if (txnsResult.error) console.error('Transactions error:', txnsResult.error);
-      if (redemptionsResult.error) console.error('Redemptions error:', redemptionsResult.error);
       if (duesResult.error) console.error('Dues error:', duesResult.error);
       if (overdueResult.error) console.error('Overdue error:', overdueResult.error);
       if (enrollmentsResult.error) console.error('Enrollments count error:', enrollmentsResult.error);
+      if (activeEnrollmentsAll.error) console.error('Active enrollments error:', activeEnrollmentsAll.error);
+      if (schemesAll.error) console.error('Schemes error:', schemesAll.error);
 
       const currentRates = {
         k18: rate18Result.data
@@ -394,32 +399,6 @@ export default function PulseDashboard() {
         }
       });
 
-      // Subtract completed redemptions in the same period
-      let redeemed18KValue = 0, redeemed22KValue = 0, redeemed24KValue = 0, redeemedSilverValue = 0;
-      let redeemed18KGrams = 0, redeemed22KGrams = 0, redeemed24KGrams = 0, redeemedSilverGrams = 0;
-
-      (redemptionsResult.data || []).forEach((r: any) => {
-        redeemed18KGrams += safeNumber(r.gold_18k_grams);
-        redeemed22KGrams += safeNumber(r.gold_22k_grams);
-        redeemed24KGrams += safeNumber(r.gold_24k_grams);
-        redeemedSilverGrams += safeNumber(r.silver_grams);
-
-        redeemed18KValue += safeNumber(r.total_value_18k);
-        redeemed22KValue += safeNumber(r.total_value_22k);
-        redeemed24KValue += safeNumber(r.total_value_24k);
-        redeemedSilverValue += safeNumber(r.total_value_silver);
-      });
-
-      collections18K = Math.max(0, collections18K - redeemed18KValue);
-      collections22K = Math.max(0, collections22K - redeemed22KValue);
-      collections24K = Math.max(0, collections24K - redeemed24KValue);
-      collectionsSilver = Math.max(0, collectionsSilver - redeemedSilverValue);
-
-      gold18KAllocated = Math.max(0, gold18KAllocated - redeemed18KGrams);
-      gold22KAllocated = Math.max(0, gold22KAllocated - redeemed22KGrams);
-      gold24KAllocated = Math.max(0, gold24KAllocated - redeemed24KGrams);
-      silverAllocated = Math.max(0, silverAllocated - redeemedSilverGrams);
-
       const periodCollections = collections18K + collections22K + collections24K + collectionsSilver;
       const goldAllocatedPeriod = gold18KAllocated + gold22KAllocated + gold24KAllocated;
 
@@ -453,6 +432,20 @@ export default function PulseDashboard() {
       const duesOutstanding = dues18K + dues22K + dues24K + duesSilver;
 
 
+      // Compute plan total = sum(installment_amount * duration_months) for each active enrollment
+      const schemesMap = new Map<string, { installment_amount: number; duration_months: number }>();
+      (schemesAll.data || []).forEach((s: any) => {
+        schemesMap.set(String(s.id), {
+          installment_amount: safeNumber(s.installment_amount),
+          duration_months: safeNumber(s.duration_months),
+        });
+      });
+      const planAmountTotal = (activeEnrollmentsAll.data || []).reduce((sum: number, e: any) => {
+        const s = schemesMap.get(String(e.plan_id));
+        if (!s) return sum;
+        return sum + s.installment_amount * s.duration_months;
+      }, 0);
+
       setMetrics({
         periodCollections,
         collections18K,
@@ -472,6 +465,8 @@ export default function PulseDashboard() {
         overdueCount: overdueResult.count || 0,
         newEnrollmentsPeriod: enrollmentsResult.count || 0,
         activeCustomers: customersCount || 0,
+        planAmountTotal,
+        totalActiveEnrollmentsAllTime: (activeEnrollmentsAll.data || []).length,
         currentRates,
       });
 
@@ -964,16 +959,16 @@ export default function PulseDashboard() {
             </div>
             <div className="grid grid-cols-2 gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
               <div className="text-xs">
-                <Badge variant="outline" className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 mb-1 text-[10px]">24K</Badge>
-                <div className="font-semibold">₹{(metrics?.collections24K ?? 0).toLocaleString()}</div>
+                <Badge variant="outline" className="bg-amber-50 dark:bg-amber-900/20 border-amber-300 mb-1 text-[10px]">18K</Badge>
+                <div className="font-semibold">₹{(metrics?.collections18K ?? 0).toLocaleString()}</div>
               </div>
               <div className="text-xs">
-                <Badge className="bg-gold-100 dark:bg-gold-900/30 text-gold-800 dark:text-gold-200 border-gold-400 mb-1 text-[10px]">21K</Badge>
+                <Badge className="bg-gold-100 dark:bg-gold-900/30 text-gold-800 dark:text-gold-200 border-gold-400 mb-1 text-[10px]">22K</Badge>
                 <div className="font-semibold">₹{(metrics?.collections22K ?? 0).toLocaleString()}</div>
               </div>
               <div className="text-xs">
-                <Badge variant="outline" className="bg-amber-50 dark:bg-amber-900/20 border-amber-300 mb-1 text-[10px]">18K</Badge>
-                <div className="font-semibold">₹{(metrics?.collections18K ?? 0).toLocaleString()}</div>
+                <Badge variant="outline" className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 mb-1 text-[10px]">24K</Badge>
+                <div className="font-semibold">₹{(metrics?.collections24K ?? 0).toLocaleString()}</div>
               </div>
               <div className="text-xs">
                 <Badge variant="outline" className="bg-slate-50 dark:bg-slate-900/20 border-slate-300 mb-1 text-[10px]">Silver</Badge>
@@ -995,16 +990,16 @@ export default function PulseDashboard() {
             <p className="text-xs text-muted-foreground mt-1">{periodLabel}</p>
             <div className="grid grid-cols-3 gap-2 pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
               <div className="text-xs">
-                <Badge variant="outline" className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 mb-1 text-[10px]">24K</Badge>
-                <div className="font-semibold">{(metrics?.gold24KAllocated ?? 0).toFixed(3)} g</div>
+                <Badge variant="outline" className="bg-amber-50 dark:bg-amber-900/20 border-amber-300 mb-1 text-[10px]">18K</Badge>
+                <div className="font-semibold">{(metrics?.gold18KAllocated ?? 0).toFixed(3)} g</div>
               </div>
               <div className="text-xs">
-                <Badge className="bg-gold-100 dark:bg-gold-900/30 text-gold-800 dark:text-gold-200 border-gold-400 mb-1 text-[10px]">21K</Badge>
+                <Badge className="bg-gold-100 dark:bg-gold-900/30 text-gold-800 dark:text-gold-200 border-gold-400 mb-1 text-[10px]">22K</Badge>
                 <div className="font-semibold">{(metrics?.gold22KAllocated ?? 0).toFixed(3)} g</div>
               </div>
               <div className="text-xs">
-                <Badge variant="outline" className="bg-amber-50 dark:bg-amber-900/20 border-amber-300 mb-1 text-[10px]">18K</Badge>
-                <div className="font-semibold">{(metrics?.gold18KAllocated ?? 0).toFixed(3)} g</div>
+                <Badge variant="outline" className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 mb-1 text-[10px]">24K</Badge>
+                <div className="font-semibold">{(metrics?.gold24KAllocated ?? 0).toFixed(3)} g</div>
               </div>
             </div>
           </CardContent>
@@ -1057,6 +1052,30 @@ export default function PulseDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Plan Amount Overview */}
+      <Card className="jewel-card border-2 border-primary/20">
+        <CardHeader>
+          <CardTitle>Total Scheme Value</CardTitle>
+          <CardDescription>Active enrollment commitments across all plans</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-gold-100 to-gold-50 dark:from-gold-900/30 dark:to-gold-800/20">
+              <p className="text-xs text-muted-foreground mb-1">Total Plan Value</p>
+              <p className="text-2xl font-bold gold-text">₹{(metrics?.planAmountTotal ?? 0).toLocaleString()}</p>
+            </div>
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-100 to-blue-50 dark:from-blue-900/30 dark:to-blue-800/20">
+              <p className="text-xs text-muted-foreground mb-1">Active Enrollments</p>
+              <p className="text-2xl font-bold text-blue-600">{metrics?.totalActiveEnrollmentsAllTime ?? 0}</p>
+            </div>
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-orange-100 to-orange-50 dark:from-orange-900/30 dark:to-orange-800/20">
+              <p className="text-xs text-muted-foreground mb-1">Total Dues & Overdue</p>
+              <p className="text-2xl font-bold text-orange-600">{(metrics?.duesOutstanding ?? 0) + (metrics?.overdueCount ?? 0)}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="jewel-card">
