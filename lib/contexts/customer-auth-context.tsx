@@ -66,34 +66,41 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
     // BYPASS: If phone in localStorage, fetch customer by phone, but NOT on /c/login
     if (typeof window !== 'undefined' && window.location.pathname !== '/c/login') {
       const phoneBypass = localStorage.getItem('customer_phone_bypass');
+      const retailerBypass = localStorage.getItem('customer_retailer_bypass');
       if (phoneBypass) {
         (async () => {
           setLoading(true);
           try {
-            // Try to get retailer_id from branding context if available
-            let retailerId = null;
-            try {
-              const { useBranding } = await import('@/lib/contexts/branding-context');
-              retailerId = useBranding()?.branding?.retailer_id || useBranding()?.branding?.id;
-              console.log('[CustomerAuth] Branding context retailerId:', retailerId);
-            } catch (e) {
-              console.warn('[CustomerAuth] Branding context not available:', e);
+            const normalizedPhone = phoneBypass.replace(/\D/g, '');
+            const phoneCandidates = [normalizedPhone, `+91${normalizedPhone}`, `91${normalizedPhone}`];
+            const retailerId = retailerBypass || null;
+
+            console.log('[CustomerAuth] Running customer bypass RPC:', { phoneCandidates, retailerId });
+            const { data, error } = await supabase.rpc('lookup_customer_by_phone', {
+              p_phone_candidates: phoneCandidates,
+              p_retailer_id: retailerId,
+            });
+            let result = Array.isArray(data) ? data[0] : data;
+
+            if (error || !result) {
+              console.warn('[CustomerAuth] lookup_customer_by_phone failed, falling back to direct query:', error);
+              let query = supabase
+                .from('customers')
+                .select('id, retailer_id, full_name, phone, email')
+                .in('phone', phoneCandidates);
+              if (retailerId) {
+                query = query.eq('retailer_id', retailerId);
+              }
+              const fallback = await query.maybeSingle();
+              result = fallback.data || null;
             }
-            let query = supabase
-              .from('customers')
-              .select('id, retailer_id, full_name, phone, email')
-              .eq('phone', phoneBypass);
-            if (retailerId) {
-              query = query.eq('retailer_id', retailerId);
-            }
-            console.log('[CustomerAuth] Running customer bypass query:', { phoneBypass, retailerId });
-            const result = await query.maybeSingle();
-            console.log('[CustomerAuth] Customer bypass result:', result);
+
+            console.log('[CustomerAuth] Customer bypass result:', { data: result, error });
             if (isMounted) {
-              if (result.data) {
-                setCustomer(result.data);
+              if (result && !error) {
+                setCustomer(result as any);
                 setUser(null); // No supabase user session
-                console.log('[CustomerAuth] Customer set from bypass:', result.data);
+                console.log('[CustomerAuth] Customer set from bypass:', result);
               } else {
                 setCustomer(null);
                 setError('No customer found for phone: ' + phoneBypass + (retailerId ? ' and retailer: ' + retailerId : ''));

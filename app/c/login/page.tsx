@@ -67,7 +67,8 @@ export default function CustomerLoginPage() {
       return;
     }
     // Save bypass info and reload
-    localStorage.setItem('customer_phone_bypass', phone);
+    const normalizedPhone = phone.replace(/\D/g, '');
+    localStorage.setItem('customer_phone_bypass', normalizedPhone);
     localStorage.setItem('customer_retailer_bypass', retailerId);
     setLoading(false);
     router.replace('/c/schemes');
