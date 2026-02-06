@@ -240,6 +240,14 @@ export default function RedemptionsPage() {
       const grams = selectedEnrollment.total_grams;
       const value = grams * rate;
 
+      if (!rate || rate <= 0) {
+        throw new Error('Current rate not available. Please refresh and try again.');
+      }
+
+      if (!grams || grams <= 0) {
+        throw new Error('No grams available for redemption.');
+      }
+
       const redemptionPayload = {
         p_retailer_id: profile.retailer_id,
         p_customer_id: selectedEnrollment.customer_id,
@@ -267,11 +275,19 @@ export default function RedemptionsPage() {
         p_bank_details: null,
       };
 
-      const { data: redemptionResult, error: redemptionError } = await supabase
-        .rpc('process_redemption', redemptionPayload)
-        .single();
+      const rpcPromise = supabase.rpc('process_redemption', redemptionPayload);
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Redemption is taking too long. Please try again.')), 15000);
+      });
+
+      const { data, error: redemptionError } = (await Promise.race([
+        rpcPromise,
+        timeoutPromise,
+      ])) as { data: any; error: any };
 
       if (redemptionError) throw redemptionError;
+
+      const redemptionResult = Array.isArray(data) ? data[0] : data;
 
       if (!redemptionResult?.created) {
         toast.error('Redemption already exists for this enrollment');

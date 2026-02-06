@@ -1,4 +1,30 @@
 -- Process redemption in a single transaction
+DROP FUNCTION IF EXISTS public.process_redemption(
+  uuid,
+  uuid,
+  uuid,
+  text,
+  redemption_status,
+  text,
+  text,
+  uuid,
+  timestamptz,
+  numeric,
+  numeric,
+  numeric,
+  numeric,
+  numeric,
+  numeric,
+  numeric,
+  numeric,
+  numeric,
+  numeric,
+  numeric,
+  numeric,
+  numeric,
+  text,
+  jsonb
+);
 CREATE OR REPLACE FUNCTION public.process_redemption(
   p_retailer_id uuid,
   p_customer_id uuid,
@@ -26,7 +52,7 @@ CREATE OR REPLACE FUNCTION public.process_redemption(
   p_bank_details jsonb
 )
 RETURNS TABLE (
-  id uuid,
+  redemption_id uuid,
   created boolean
 )
 LANGUAGE plpgsql
@@ -38,7 +64,9 @@ DECLARE
   v_has_redemption_status boolean;
   v_updated integer;
 BEGIN
-  PERFORM pg_advisory_xact_lock(hashtext(p_enrollment_id::text));
+  IF NOT pg_try_advisory_xact_lock(hashtext(p_enrollment_id::text)) THEN
+    RAISE EXCEPTION 'Redemption is already being processed';
+  END IF;
 
   SELECT r.id
     INTO v_existing_id
@@ -64,11 +92,11 @@ BEGIN
     UPDATE public.enrollments
     SET redemption_status = p_redemption_status,
         status = 'COMPLETED'
-    WHERE id = p_enrollment_id;
+    WHERE enrollments.id = p_enrollment_id;
   ELSE
     UPDATE public.enrollments
     SET status = 'COMPLETED'
-    WHERE id = p_enrollment_id;
+    WHERE enrollments.id = p_enrollment_id;
   END IF;
 
   GET DIAGNOSTICS v_updated = ROW_COUNT;
@@ -78,7 +106,7 @@ BEGIN
 
   UPDATE public.customers
   SET status = 'INACTIVE'
-  WHERE id = p_customer_id;
+  WHERE customers.id = p_customer_id;
 
   GET DIAGNOSTICS v_updated = ROW_COUNT;
   IF v_updated = 0 THEN
