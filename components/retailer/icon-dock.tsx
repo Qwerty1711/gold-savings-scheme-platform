@@ -1,7 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Activity, Users, Gem, Wallet, AlertCircle, TrendingUp, Award } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -17,6 +16,7 @@ const navItems = [
 
 export function IconDock() {
   const pathname = usePathname();
+  const router = useRouter();
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -28,19 +28,21 @@ export function IconDock() {
             return (
               <Tooltip key={item.href}>
                 <TooltipTrigger asChild>
-                  <Link
-                    href={item.href}
+                  <button
+                    type="button"
+                    onClick={() => router.push(item.href)}
                     className={`relative group flex flex-col items-center justify-center gap-1 px-3 md:px-4 py-3 rounded-2xl transition-all duration-300 ${
                       isActive
                         ? `bg-gradient-to-r ${item.color} text-white shadow-lg scale-105`
                         : 'text-muted-foreground hover:text-gold-600 dark:hover:text-gold-400 hover:bg-gold-50/50 dark:hover:bg-gold-900/20'
                     }`}
+                    aria-current={isActive ? 'page' : undefined}
                   >
                     <Icon className={`w-6 h-6 transition-transform group-hover:scale-110 ${isActive ? 'animate-pulse-gold' : ''}`} />
                     <span className="text-xs font-semibold hidden md:block text-center whitespace-nowrap">
                       {item.label}
                     </span>
-                  </Link>
+                  </button>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="luxury-card border-gold-300/50">
                   <p className="font-semibold text-sm">{item.label}</p>

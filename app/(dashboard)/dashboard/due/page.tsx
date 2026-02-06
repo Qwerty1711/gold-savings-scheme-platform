@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Calendar, AlertCircle, Phone, Search, Filter } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/contexts/auth-context';
@@ -40,6 +41,7 @@ export default function DuePage() {
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
   const [loading, setLoading] = useState(true);
+  const loadSeqRef = useRef(0);
   const router = useRouter();
 
   useEffect(() => {
@@ -59,6 +61,7 @@ export default function DuePage() {
 
   async function loadOverdues() {
     if (!user) return;
+    const requestId = ++loadSeqRef.current;
 
     setLoading(true);
 
@@ -118,7 +121,8 @@ export default function DuePage() {
         const effectiveEnd = end < endLimit ? end : endLimit;
         query = query
           .gte('due_date', toDateOnly(start))
-          .lt('due_date', toDateOnly(effectiveEnd));
+          .lt('due_date', toDateOnly(effectiveEnd))
+          .lt('due_date', todayISO);
       } else {
         query = query.lt('due_date', todayISO);
       }
@@ -127,10 +131,11 @@ export default function DuePage() {
 
       if (billingError) throw billingError;
 
+      if (requestId !== loadSeqRef.current) return;
+
       // Get enrollment and customer details
       if (!billingData || billingData.length === 0) {
         setOverdues([]);
-        setLoading(false);
         return;
       }
 
@@ -195,9 +200,13 @@ export default function DuePage() {
       setOverdues(overdueList);
     } catch (error) {
       console.error('Error loading overdue enrollments:', error);
-      setOverdues([]);
+      if (requestId === loadSeqRef.current) {
+        setOverdues([]);
+      }
     } finally {
-      setLoading(false);
+      if (requestId === loadSeqRef.current) {
+        setLoading(false);
+      }
     }
   }
 

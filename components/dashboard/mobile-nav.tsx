@@ -2,7 +2,6 @@
 
 import { useEffect } from 'react';
 import { Activity, Users, Sparkles, TrendingUp, AlertCircle, UserCircle, Award } from 'lucide-react';
-import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { usePermissions } from '@/lib/hooks/use-permissions';
@@ -41,20 +40,21 @@ export function MobileNav() {
           const Icon = item.icon;
 
           return (
-            <Link
+            <button
               key={item.name}
-              href={item.href}
-              prefetch
+              type="button"
+              onClick={() => router.push(item.href)}
               className={cn(
                 'flex flex-col items-center gap-1 px-2 py-2 rounded-xl transition-all flex-1 min-w-0',
                 isActive
                   ? 'text-primary bg-primary/10'
                   : 'text-muted-foreground hover:text-foreground'
               )}
+              aria-current={isActive ? 'page' : undefined}
             >
               <Icon className={cn('h-5 w-5 flex-shrink-0', isActive && 'animate-pulse-gold')} />
               <span className="text-[10px] font-medium truncate w-full text-center">{item.name}</span>
-            </Link>
+            </button>
           );
         })}
       </div>
