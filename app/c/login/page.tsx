@@ -2,7 +2,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase/client';
+import { supabaseCustomer as supabase } from '@/lib/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -49,13 +49,22 @@ export default function CustomerLoginPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
+    const normalizedPhone = phone.replace(/\D/g, '');
+    const phoneCandidates = [
+      phone,
+      normalizedPhone,
+      `+91${normalizedPhone}`,
+      `91${normalizedPhone}`,
+    ].filter(Boolean);
+    console.log('[CustomerLogin] Attempt', { retailerId, phone, normalizedPhone, phoneCandidates });
     // Try to find customer by retailer and phone
     const { data, error } = await supabase
       .from('customers')
       .select('id, retailer_id, phone, full_name')
       .eq('retailer_id', retailerId)
-      .eq('phone', phone)
+      .in('phone', phoneCandidates)
       .maybeSingle();
+    console.log('[CustomerLogin] Lookup result', { data, error });
     if (error) {
       setError('Login failed. Please try again.');
       setLoading(false);
@@ -67,7 +76,7 @@ export default function CustomerLoginPage() {
       return;
     }
     // Save bypass info and reload
-    localStorage.setItem('customer_phone_bypass', phone);
+    localStorage.setItem('customer_phone_bypass', normalizedPhone || phone);
     localStorage.setItem('customer_retailer_bypass', retailerId);
     setLoading(false);
     router.replace('/c/schemes');

@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { Sparkles, ArrowRight, Plus, Calendar } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/lib/supabase/client';
+import { supabaseCustomer as supabase } from '@/lib/supabase/client';
 import { useCustomerAuth } from '@/lib/contexts/customer-auth-context';
 import { useBranding } from '@/lib/contexts/branding-context';
 import { useRouter } from 'next/navigation';

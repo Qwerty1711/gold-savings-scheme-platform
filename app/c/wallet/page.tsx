@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Gem, ArrowRight, Plus, TrendingUp, Calendar, Wallet, LogOut, Bell } from 'lucide-react';
-import { supabase } from '@/lib/supabase/client';
+import { supabaseCustomer as supabase } from '@/lib/supabase/client';
 import { useCustomerAuth } from '@/lib/contexts/customer-auth-context';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';

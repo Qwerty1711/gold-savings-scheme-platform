@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Package, Sparkles, CheckCircle, IndianRupee, Calendar, TrendingUp } from 'lucide-react';
-import { supabase } from '@/lib/supabase/client';
+import { supabaseCustomer as supabase } from '@/lib/supabase/client';
 import { useCustomerAuth } from '@/lib/contexts/customer-auth-context';
 import { createNotification } from '@/lib/utils/notifications';
 

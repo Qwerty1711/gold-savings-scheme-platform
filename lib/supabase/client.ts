@@ -64,6 +64,23 @@ export const supabase = createClient(supabaseUrl!, supabaseAnonKey!, {
   },
 });
 
+// Separate client for customer auth/data (isolated session storage)
+export const supabaseCustomer = createClient(supabaseUrl!, supabaseAnonKey!, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+    lock: noOpLock,
+    flowType: 'implicit',
+    storageKey: 'goldsaver-customer-auth',
+  },
+  global: {
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  },
+});
+
 export type Database = {
   public: {
     Tables: {

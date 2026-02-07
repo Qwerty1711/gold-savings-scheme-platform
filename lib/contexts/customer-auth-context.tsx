@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase/client';
+import { supabaseCustomer } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 
 type CustomerProfile = {
@@ -48,8 +48,18 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
     let isMounted = true;
 
     const initializeAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await supabaseCustomer.auth.getSession();
       if (!isMounted) return;
+
+      if (session?.user) {
+        console.log('[CustomerAuth] Existing session user detected', {
+          id: session.user.id,
+          email: session.user.email,
+          phone: session.user.phone,
+        });
+      } else {
+        console.log('[CustomerAuth] No existing session user');
+      }
 
       setUser(session?.user ?? null);
 
@@ -90,7 +100,8 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
               `+91${normalizedPhone}`,
               `91${normalizedPhone}`,
             ].filter(Boolean);
-            let query = supabase
+            console.log('[CustomerAuth] Bypass lookup', { phoneCandidates, retailerId });
+            let query = supabaseCustomer
               .from('customers')
               .select('id, retailer_id, full_name, phone, email')
               .in('phone', phoneCandidates);
@@ -130,8 +141,17 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
     initializeAuth();
 
     const { data: { subscription } } =
-      supabase.auth.onAuthStateChange(async (_event, session) => {
+      supabaseCustomer.auth.onAuthStateChange(async (_event, session) => {
         if (!isMounted) return;
+
+        console.log('[CustomerAuth] Auth state change', {
+          event: _event,
+          user: session?.user ? {
+            id: session.user.id,
+            email: session.user.email,
+            phone: session.user.phone,
+          } : null,
+        });
 
         setUser(session?.user ?? null);
 
@@ -157,13 +177,13 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
    */
   const hydrateCustomer = async (userId: string) => {
     // Get the current user session to access phone/email
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await supabaseCustomer.auth.getUser();
     if (!user) {
       setCustomer(null);
       return;
     }
     // Prefer phone, fallback to email
-    let query = supabase
+    let query = supabaseCustomer
       .from('customers')
       .select('id, retailer_id, full_name, phone, email')
       .maybeSingle();
@@ -238,7 +258,7 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
         return { success: false, error: 'Invalid login response' };
       }
 
-      const { error } = await supabase.auth.setSession({
+      const { error } = await supabaseCustomer.auth.setSession({
         access_token: data.session.access_token,
         refresh_token: data.session.refresh_token,
       });
@@ -263,7 +283,7 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
       const normalizedPhone = phone.replace(/\D/g, '');
       const email = `${normalizedPhone}@customer.goldsaver.app`;
 
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabaseCustomer.auth.signInWithPassword({
         email,
         password: pin,
       });
@@ -280,7 +300,7 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    await supabaseCustomer.auth.signOut();
     setUser(null);
     setCustomer(null);
     // Do NOT clear retailer_id from localStorage on sign out
