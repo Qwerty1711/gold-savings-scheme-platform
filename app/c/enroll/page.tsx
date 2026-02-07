@@ -86,7 +86,6 @@ export default function CustomerEnrollmentPage() {
         .select('id, name, installment_amount, duration_months, bonus_percentage, description, is_active, allow_self_enroll')
         .eq('retailer_id', customer.retailer_id)
         .eq('is_active', true)
-        .eq('allow_self_enroll', true)
         .order('installment_amount', { ascending: true, nullsFirst: false });
       
       if (error) throw error;

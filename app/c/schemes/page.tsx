@@ -111,8 +111,8 @@ export default function CustomerSchemesPage() {
       const allPlansResult = await allPlansQuery;
       const allPlans: Plan[] = allPlansResult.data || [];
 
-      // Show only active, self-enrollable plans as available in the list
-      setAvailablePlans(allPlans.filter(p => p.is_active && p.allow_self_enroll));
+      // Show all active plans as available in the list
+      setAvailablePlans(allPlans.filter(p => p.is_active));
 
       // Fetch enrollments
       let enrollmentsQuery = supabase
@@ -354,18 +354,16 @@ export default function CustomerSchemesPage() {
         {/* Available Plans */}
         {(() => {
           const enrolledPlanIds = new Set(enrollments.map(e => e.planId).filter(Boolean));
-          const displayPlans = availablePlans;
+          const displayPlans = availablePlans.filter(plan => !enrolledPlanIds.has(plan.id));
           if (displayPlans.length > 0) {
             return (
               <div className="space-y-2">
                 <div className="space-y-1">
-                  <h2 className="text-3xl font-bold bg-gradient-to-r from-gold-600 to-rose-600 bg-clip-text text-transparent">Available Plans</h2>
-                  <p className="text-sm text-muted-foreground">Explore and enroll in any available scheme from your retailer.</p>
+                  <h2 className="text-3xl font-bold bg-gradient-to-r from-gold-600 to-rose-600 bg-clip-text text-transparent">Other Available Plans</h2>
+                  <p className="text-sm text-muted-foreground">Grow more wealth with our other schemes.</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {displayPlans.map(plan => {
-                    const alreadyEnrolled = enrolledPlanIds.has(plan.id);
-                    return (
+                  {displayPlans.map(plan => (
                     <Card key={plan.id} className="group overflow-hidden shadow-xl border-gold-100 hover:scale-[1.02] transition-transform">
                       <div className="h-28 bg-gradient-to-br from-rose-400 via-gold-400 to-amber-600 relative overflow-hidden flex items-center px-5">
                         <div className="absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity duration-300 bg-white"></div>
@@ -381,17 +379,12 @@ export default function CustomerSchemesPage() {
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
-                        <Button
-                          className="w-full luxury-gold-gradient text-white hover:opacity-95 rounded-2xl font-semibold py-2 shadow-md"
-                          onClick={() => openEnrollDialog(plan)}
-                          disabled={alreadyEnrolled}
-                        >
-                          <Plus className="w-5 h-5 mr-2" /> {alreadyEnrolled ? 'Already Enrolled' : 'Enroll Now'}
+                        <Button className="w-full luxury-gold-gradient text-white hover:opacity-95 rounded-2xl font-semibold py-2 shadow-md" onClick={() => openEnrollDialog(plan)}>
+                          <Plus className="w-5 h-5 mr-2" /> Enroll Now
                         </Button>
                       </CardContent>
                     </Card>
-                  );
-                  })}
+                  ))}
                 </div>
               </div>
             );
