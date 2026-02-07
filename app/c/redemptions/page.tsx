@@ -24,7 +24,7 @@ type RedemptionRow = {
 };
 
 export default function CustomerRedemptionsPage() {
-	const { customer, loading: authLoading } = useCustomerAuth();
+	const { customer, user, loading: authLoading } = useCustomerAuth();
 	const [redemptions, setRedemptions] = useState<RedemptionRow[]>([]);
 	const [loading, setLoading] = useState(true);
 	const router = useRouter();
@@ -40,14 +40,28 @@ export default function CustomerRedemptionsPage() {
 	}, [customer, authLoading, router]);
 
 	async function loadRedemptions() {
-		if (!customer) return;
+		if (!customer && !user) return;
 		setLoading(true);
 		try {
-			const { data, error } = await supabase
+			const customerId = customer?.id || user?.id;
+			const authUserId = user?.id;
+
+			let redemptionsQuery = supabase
 				.from('redemptions')
 				.select('id, redemption_date, redemption_status, redemption_type, total_redemption_value, enrollments(scheme_templates(name))')
-				.eq('customer_id', customer.id)
 				.order('redemption_date', { ascending: false });
+
+			if (customerId && authUserId && customerId !== authUserId) {
+				redemptionsQuery = redemptionsQuery.or(`customer_id.eq.${customerId},customer_id.eq.${authUserId}`);
+			} else if (customerId) {
+				redemptionsQuery = redemptionsQuery.eq('customer_id', customerId);
+			}
+
+			if (customer?.retailer_id) {
+				redemptionsQuery = redemptionsQuery.eq('retailer_id', customer.retailer_id);
+			}
+
+			const { data, error } = await redemptionsQuery;
 
 			if (error) throw error;
 			setRedemptions((data || []) as RedemptionRow[]);

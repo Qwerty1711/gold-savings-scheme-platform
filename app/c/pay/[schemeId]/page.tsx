@@ -38,7 +38,7 @@ type Enrollment = {
 type GoldRate = {
   id: string;
   rate_per_gram: number;
-  valid_from: string;
+  effective_from: string;
 };
 
 type PaymentType = 'PRIMARY_INSTALLMENT' | 'TOP_UP';
@@ -172,7 +172,7 @@ export default function PaymentPage({ params }: { params: { schemeId: string } }
           rate = {
             id: (rateRow as any).id,
             rate_per_gram: Number((rateRow as any).rate_per_gram),
-            valid_from: (rateRow as any).valid_from,
+            effective_from: (rateRow as any).effective_from ?? (rateRow as any).valid_from,
           };
         }
       } catch {
@@ -182,10 +182,10 @@ export default function PaymentPage({ params }: { params: { schemeId: string } }
       if (!rate) {
         const rateResult = await supabase
           .from('gold_rates')
-          .select('id, rate_per_gram, valid_from')
+          .select('id, rate_per_gram, effective_from')
           .eq('retailer_id', enr.retailer_id)
           .eq('karat', desiredKarat)
-          .order('valid_from', { ascending: false })
+          .order('effective_from', { ascending: false })
           .limit(1)
           .maybeSingle();
 
@@ -272,10 +272,11 @@ export default function PaymentPage({ params }: { params: { schemeId: string } }
         grams_allocated_snapshot: gramsAllocated,
 
         paid_at: currentTimestamp,
+        recorded_at: currentTimestamp,
+        payment_status: 'SUCCESS',
         source: 'CUSTOMER_ONLINE',
 
-        // TEXT column exists in schema
-        payment_ref: paymentMethod,
+        mode: paymentMethod,
 
         // TEXT column exists in schema
         receipt_number: `RCP${Date.now()}${Math.floor(Math.random() * 1000)}`,

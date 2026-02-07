@@ -30,7 +30,7 @@ type DueRow = {
 };
 
 export default function CustomerDuesPage() {
-	const { customer, loading: authLoading } = useCustomerAuth();
+	const { customer, user, loading: authLoading } = useCustomerAuth();
 	const [dues, setDues] = useState<DueRow[]>([]);
 	const [loading, setLoading] = useState(true);
 	const router = useRouter();
@@ -52,15 +52,29 @@ export default function CustomerDuesPage() {
 	}, [customer, authLoading, router]);
 
 	async function loadDues() {
-		if (!customer) return;
+		if (!customer && !user) return;
 		setLoading(true);
 		try {
-			const { data, error } = await supabase
+			const customerId = customer?.id || user?.id;
+			const authUserId = user?.id;
+
+			let duesQuery = supabase
 				.from('enrollment_billing_months')
 				.select('id, enrollment_id, billing_month, due_date, primary_paid, status, enrollments(commitment_amount, scheme_templates(name, monthly_amount, installment_amount))')
-				.eq('customer_id', customer.id)
 				.eq('primary_paid', false)
 				.order('due_date', { ascending: true });
+
+			if (customerId && authUserId && customerId !== authUserId) {
+				duesQuery = duesQuery.or(`customer_id.eq.${customerId},customer_id.eq.${authUserId}`);
+			} else if (customerId) {
+				duesQuery = duesQuery.eq('customer_id', customerId);
+			}
+
+			if (customer?.retailer_id) {
+				duesQuery = duesQuery.eq('retailer_id', customer.retailer_id);
+			}
+
+			const { data, error } = await duesQuery;
 
 			if (error) throw error;
 			setDues((data || []) as DueRow[]);

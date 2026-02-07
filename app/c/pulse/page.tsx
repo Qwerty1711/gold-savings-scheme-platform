@@ -51,7 +51,7 @@ function safeNumber(v: unknown): number {
 }
 
 export default function CustomerPulsePage() {
-  const { customer } = useCustomerAuth();
+  const { customer, user } = useCustomerAuth();
   
   const [metrics, setMetrics] = useState<CustomerMetrics | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -77,13 +77,14 @@ export default function CustomerPulsePage() {
   }, [customer?.id, timeFilter, customStart, customEnd]);
 
   async function loadDashboard() {
-    if (!customer?.id || !customer?.retailer_id) return;
+    if (!customer?.id && !user?.id) return;
 
     setLoading(true);
 
     try {
-      const retailerId = customer.retailer_id;
-      const customerId = customer.id;
+      const retailerId = customer?.retailer_id;
+      const customerId = customer?.id || user?.id;
+      const authUserId = user?.id;
       
       // Calculate date range
       const now = new Date();
@@ -134,11 +135,21 @@ export default function CustomerPulsePage() {
       const todayDateISO = startOfDayUTC.toISOString().split('T')[0];
 
       // Fetch customer's enrollments
-      const { data: enrollments, error: enrollError } = await supabase
+      let enrollmentsQuery = supabase
         .from('enrollments')
-        .select('id, plan_id, karat, status, scheme_templates(name, installment_amount, monthly_amount, duration_months)')
-        .eq('customer_id', customerId)
-        .eq('retailer_id', retailerId);
+        .select('id, plan_id, karat, status, scheme_templates(name, installment_amount, monthly_amount, duration_months)');
+
+      if (customerId && authUserId && customerId !== authUserId) {
+        enrollmentsQuery = enrollmentsQuery.or(`customer_id.eq.${customerId},customer_id.eq.${authUserId}`);
+      } else if (customerId) {
+        enrollmentsQuery = enrollmentsQuery.eq('customer_id', customerId);
+      }
+
+      if (retailerId) {
+        enrollmentsQuery = enrollmentsQuery.eq('retailer_id', retailerId);
+      }
+
+      const { data: enrollments, error: enrollError } = await enrollmentsQuery;
 
       if (enrollError) console.error('Enrollments error:', enrollError);
 
@@ -153,10 +164,9 @@ export default function CustomerPulsePage() {
       // Fetch transactions for this customer's enrollments (in period)
       let txnsResult: any = { data: [], error: null };
       if (enrollmentIds.length > 0) {
-        txnsResult = await supabase
+        let txnsQuery = supabase
           .from('transactions')
           .select('id, amount_paid, grams_allocated_snapshot, paid_at, enrollment_id, txn_type')
-          .eq('retailer_id', retailerId)
           .eq('payment_status', 'SUCCESS')
           .in('txn_type', ['PRIMARY_INSTALLMENT', 'TOP_UP'])
           .in('enrollment_id', enrollmentIds)
@@ -164,6 +174,12 @@ export default function CustomerPulsePage() {
           .lt('paid_at', endISO)
           .order('paid_at', { ascending: false })
           .limit(100);
+
+        if (retailerId) {
+          txnsQuery = txnsQuery.eq('retailer_id', retailerId);
+        }
+
+        txnsResult = await txnsQuery;
       }
 
       if (txnsResult.error) console.error('Transactions error:', txnsResult.error);
@@ -171,14 +187,19 @@ export default function CustomerPulsePage() {
       // Fetch all-time transactions for totals
       let allTimeTxns: any = { data: [], error: null };
       if (enrollmentIds.length > 0) {
-        allTimeTxns = await supabase
+        let allTimeQuery = supabase
           .from('transactions')
           .select('amount_paid, grams_allocated_snapshot, enrollment_id')
-          .eq('retailer_id', retailerId)
           .eq('payment_status', 'SUCCESS')
           .in('txn_type', ['PRIMARY_INSTALLMENT', 'TOP_UP'])
           .in('enrollment_id', enrollmentIds)
           .limit(500);
+
+        if (retailerId) {
+          allTimeQuery = allTimeQuery.eq('retailer_id', retailerId);
+        }
+
+        allTimeTxns = await allTimeQuery;
       }
 
       // Calculate totals
@@ -199,24 +220,34 @@ export default function CustomerPulsePage() {
       // Calculate dues
       let duesResult: any = { data: [], error: null };
       if (enrollmentIds.length > 0) {
-        duesResult = await supabase
+        let duesQuery = supabase
           .from('enrollment_billing_months')
           .select('enrollment_id')
-          .eq('retailer_id', retailerId)
           .in('enrollment_id', enrollmentIds)
           .eq('primary_paid', false)
           .gte('due_date', todayDateISO);
+
+        if (retailerId) {
+          duesQuery = duesQuery.eq('retailer_id', retailerId);
+        }
+
+        duesResult = await duesQuery;
       }
 
       let overdueResult: any = { count: 0, error: null };
       if (enrollmentIds.length > 0) {
-        overdueResult = await supabase
+        let overdueQuery = supabase
           .from('enrollment_billing_months')
           .select('enrollment_id', { count: 'exact', head: true })
-          .eq('retailer_id', retailerId)
           .in('enrollment_id', enrollmentIds)
           .eq('primary_paid', false)
           .lt('due_date', todayDateISO);
+
+        if (retailerId) {
+          overdueQuery = overdueQuery.eq('retailer_id', retailerId);
+        }
+
+        overdueResult = await overdueQuery;
       }
 
       // Calculate total scheme value
@@ -228,11 +259,17 @@ export default function CustomerPulsePage() {
       });
 
       // Fetch current rates
+      const rateBaseQuery = (karat: string) => {
+        let query = supabase.from('gold_rates').select('rate_per_gram, effective_from').eq('karat', karat).order('effective_from', { ascending: false }).limit(1);
+        if (retailerId) query = query.eq('retailer_id', retailerId);
+        return query.maybeSingle();
+      };
+
       const [rate18Result, rate22Result, rate24Result, rateSilverResult] = await Promise.all([
-        supabase.from('gold_rates').select('rate_per_gram, effective_from').eq('retailer_id', retailerId).eq('karat', '18K').order('effective_from', { ascending: false }).limit(1).maybeSingle(),
-        supabase.from('gold_rates').select('rate_per_gram, effective_from').eq('retailer_id', retailerId).eq('karat', '22K').order('effective_from', { ascending: false }).limit(1).maybeSingle(),
-        supabase.from('gold_rates').select('rate_per_gram, effective_from').eq('retailer_id', retailerId).eq('karat', '24K').order('effective_from', { ascending: false }).limit(1).maybeSingle(),
-        supabase.from('gold_rates').select('rate_per_gram, effective_from').eq('retailer_id', retailerId).eq('karat', 'SILVER').order('effective_from', { ascending: false }).limit(1).maybeSingle(),
+        rateBaseQuery('18K'),
+        rateBaseQuery('22K'),
+        rateBaseQuery('24K'),
+        rateBaseQuery('SILVER'),
       ]);
 
       const currentRates = {

@@ -38,8 +38,6 @@ type EnrollmentRow = {
   customer_id: string;
   retailer_id: string;
   commitment_amount?: number | null;
-  total_paid?: number | null;
-  total_grams_allocated?: number | null;
   scheme_templates?: Plan | null;
 };
 
@@ -50,7 +48,7 @@ type BillingRow = {
 };
 
 export default function CustomerWalletPage() {
-  const { customer, signOut, loading: authLoading } = useCustomerAuth();
+  const { customer, user, signOut, loading: authLoading } = useCustomerAuth();
   const [wallet, setWallet] = useState<WalletData | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -73,14 +71,28 @@ export default function CustomerWalletPage() {
   }, [customer, authLoading, router]);
 
   async function loadWallet() {
-    if (!customer) return;
+    if (!customer && !user) return;
 
     try {
-      const { data: enrollmentsData, error: enrollmentsError } = await supabase
+      const customerId = customer?.id || user?.id;
+      const authUserId = user?.id;
+
+      let enrollmentsQuery = supabase
         .from('enrollments')
-        .select('id, status, customer_id, retailer_id, commitment_amount, total_paid, total_grams_allocated, scheme_templates(id, name, installment_amount, monthly_amount, duration_months)')
-        .eq('customer_id', customer.id)
+        .select('id, status, customer_id, retailer_id, commitment_amount, scheme_templates(id, name, installment_amount, monthly_amount, duration_months)')
         .eq('status', 'ACTIVE');
+
+      if (customerId && authUserId && customerId !== authUserId) {
+        enrollmentsQuery = enrollmentsQuery.or(`customer_id.eq.${customerId},customer_id.eq.${authUserId}`);
+      } else if (customerId) {
+        enrollmentsQuery = enrollmentsQuery.eq('customer_id', customerId);
+      }
+
+      if (customer?.retailer_id) {
+        enrollmentsQuery = enrollmentsQuery.eq('retailer_id', customer.retailer_id);
+      }
+
+      const { data: enrollmentsData, error: enrollmentsError } = await enrollmentsQuery;
 
       if (enrollmentsError) throw enrollmentsError;
 
@@ -106,25 +118,53 @@ export default function CustomerWalletPage() {
           .select('rate_per_gram')
           .eq('retailer_id', customer.retailer_id)
           .eq('karat', '22K')
-          .order('valid_from', { ascending: false })
+          .order('effective_from', { ascending: false })
           .limit(1)
           .maybeSingle();
 
         currentRate = (fallbackRate as any)?.rate_per_gram ?? null;
       }
 
-      const totalGold = enrollments.reduce((sum, e) => sum + Number(e.total_grams_allocated || 0), 0);
-      const totalPaid = enrollments.reduce((sum, e) => sum + Number(e.total_paid || 0), 0);
-
-      let nextDue: WalletData['nextDue'] = null;
+      let totalGold = 0;
+      let totalPaid = 0;
 
       const enrollmentIds = enrollments.map((e) => e.id);
       if (enrollmentIds.length > 0) {
-        const { data: billingRows, error: billingErr } = await supabase
+        let txQuery = supabase
+          .from('transactions')
+          .select('enrollment_id, amount_paid, grams_allocated_snapshot')
+          .in('enrollment_id', enrollmentIds)
+          .eq('payment_status', 'SUCCESS')
+          .in('txn_type', ['PRIMARY_INSTALLMENT', 'TOP_UP']);
+
+        if (customer?.retailer_id) {
+          txQuery = txQuery.eq('retailer_id', customer.retailer_id);
+        }
+
+        const { data: txnRows, error: txnErr } = await txQuery;
+
+        if (!txnErr && txnRows) {
+          for (const row of txnRows as any[]) {
+            totalPaid += Number(row.amount_paid || 0);
+            totalGold += Number(row.grams_allocated_snapshot || 0);
+          }
+        }
+      }
+
+      let nextDue: WalletData['nextDue'] = null;
+
+      if (enrollmentIds.length > 0) {
+        let billingQuery = supabase
           .from('enrollment_billing_months')
           .select('enrollment_id, due_date, primary_paid')
           .in('enrollment_id', enrollmentIds)
           .eq('billing_month', currentMonthStr);
+
+        if (customer?.retailer_id) {
+          billingQuery = billingQuery.eq('retailer_id', customer.retailer_id);
+        }
+
+        const { data: billingRows, error: billingErr } = await billingQuery;
 
         if (!billingErr && billingRows) {
           const unpaid = (billingRows as BillingRow[]).filter((b) => !b.primary_paid && b.due_date);

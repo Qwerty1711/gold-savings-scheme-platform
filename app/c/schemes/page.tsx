@@ -62,7 +62,7 @@ const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'S
 
 export default function CustomerSchemesPage() {
   const { branding, loading: brandingLoading } = useBranding();
-  const { customer, loading: authLoading } = useCustomerAuth();
+  const { customer, user, loading: authLoading } = useCustomerAuth();
   const router = useRouter();
 
 
@@ -91,26 +91,46 @@ export default function CustomerSchemesPage() {
   }
 
   async function loadData() {
-    if (!customer) return;
+    if (!customer && !user) return;
     setLoading(true);
 
     try {
+      const retailerId = customer?.retailer_id;
+      const customerId = customer?.id || user?.id;
+      const authUserId = user?.id;
+
       // Fetch ALL plans for mapping (active/inactive)
-      const allPlansResult = await supabase
+      let allPlansQuery = supabase
         .from('scheme_templates')
-        .select('id, retailer_id, name, installment_amount, monthly_amount, duration_months, bonus_percentage, description, is_active, allow_self_enroll')
-        .eq('retailer_id', customer.retailer_id);
+        .select('id, retailer_id, name, installment_amount, monthly_amount, duration_months, bonus_percentage, description, is_active, allow_self_enroll');
+
+      if (retailerId) {
+        allPlansQuery = allPlansQuery.eq('retailer_id', retailerId);
+      }
+
+      const allPlansResult = await allPlansQuery;
       const allPlans: Plan[] = allPlansResult.data || [];
 
       // Show all active plans as available in the list
       setAvailablePlans(allPlans.filter(p => p.is_active));
 
       // Fetch enrollments
-      const enrollmentsResult = await supabase
+      let enrollmentsQuery = supabase
         .from('enrollments')
         .select('id, plan_id, commitment_amount, status, created_at, scheme_templates(id, name, installment_amount, monthly_amount, duration_months, bonus_percentage, description, is_active, allow_self_enroll, created_at)')
-        .eq('customer_id', customer.id)
         .order('created_at', { ascending: false });
+
+      if (customerId && authUserId && customerId !== authUserId) {
+        enrollmentsQuery = enrollmentsQuery.or(`customer_id.eq.${customerId},customer_id.eq.${authUserId}`);
+      } else if (customerId) {
+        enrollmentsQuery = enrollmentsQuery.eq('customer_id', customerId);
+      }
+
+      if (retailerId) {
+        enrollmentsQuery = enrollmentsQuery.eq('retailer_id', retailerId);
+      }
+
+      const enrollmentsResult = await enrollmentsQuery;
       const enrollmentRows = enrollmentsResult.data || [];
 
       const planMap = new Map(allPlans.map(p => [p.id, p]));
@@ -120,15 +140,20 @@ export default function CustomerSchemesPage() {
         const enrollmentIds = enrollmentRows.map(e => e.id);
         if (enrollmentIds.length > 0) {
           try {
-            const { data: txData, error } = await supabase
+            let txQuery = supabase
               .from('transactions')
               .select('id, enrollment_id, amount_paid, grams_allocated_snapshot, paid_at, txn_type, payment_status')
-              .eq('retailer_id', customer.retailer_id)
               .eq('payment_status', 'SUCCESS')
               .in('txn_type', ['PRIMARY_INSTALLMENT', 'TOP_UP'])
               .in('enrollment_id', enrollmentIds)
               .order('paid_at', { ascending: false })
               .limit(500);
+
+            if (retailerId) {
+              txQuery = txQuery.eq('retailer_id', retailerId);
+            }
+
+            const { data: txData, error } = await txQuery;
             if (error) {
               console.warn('DEBUG transaction query error:', error);
             }

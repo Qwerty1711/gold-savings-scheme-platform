@@ -146,36 +146,30 @@ export default function CustomerEnrollmentPage() {
     setIsEnrolling(true);
     
     try {
-      const startDate = new Date();
-      const firstBillingMonth = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-      const dueDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 5); // 5th of next month
-      
-      // Create enrollment
-      const { data: enrollmentData, error: enrollmentError } = await supabase
-        .from('enrollments')
-        .insert({
-          retailer_id: customer.retailer_id,
-          customer_id: customer.id,
-          plan_id: selectedPlan,
-          monthly_amount: commitmentAmountNum,
-          start_date: startDate.toISOString().split('T')[0],
-          first_billing_month: firstBillingMonth.toISOString().split('T')[0],
-          first_due_date: dueDate.toISOString().split('T')[0],
-          billing_day_of_month: 5,
-          karat: selectedKarat,
-          status: 'ACTIVE',
-        })
-        .select()
-        .single();
-      
-      if (enrollmentError) throw enrollmentError;
-      
+      const { data: enrollResult, error: enrollError } = await supabase.rpc('customer_self_enroll', {
+        p_plan_id: selectedPlan,
+        p_commitment_amount: commitmentAmountNum,
+        p_source: 'CUSTOMER_PORTAL',
+      });
+
+      if (enrollError) throw enrollError;
+
+      const enrollPayload = Array.isArray(enrollResult) ? enrollResult[0] : enrollResult;
+      if (!enrollPayload?.success) {
+        throw new Error(enrollPayload?.error || 'Enrollment failed');
+      }
+
+      const enrollmentId = enrollPayload.scheme_id || enrollPayload.enrollment_id;
+      if (!enrollmentId) {
+        throw new Error('Enrollment created but no enrollment id returned');
+      }
+
       const enrolledPlanName = plans.find((p) => p.id === selectedPlan)?.name || 'Scheme';
 
       void createNotification({
         retailerId: customer.retailer_id,
         customerId: customer.id,
-        enrollmentId: enrollmentData.id,
+        enrollmentId,
         type: 'GENERAL',
         message: `New enrollment: ${customer.full_name} enrolled in ${enrolledPlanName}`,
         metadata: {
@@ -184,57 +178,26 @@ export default function CustomerEnrollmentPage() {
         },
       });
 
-      // If customer wants to pay now, create transaction
       if (payNow && initialPaymentNum >= commitmentAmountNum) {
-        const { error: transactionError } = await supabase
-          .from('transactions')
-          .insert({
-            retailer_id: customer.retailer_id,
-            enrollment_id: enrollmentData.id,
-            customer_id: customer.id,
-            txn_type: 'PRIMARY_INSTALLMENT',
-            amount_paid: initialPaymentNum,
-            billing_month: firstBillingMonth.toISOString().split('T')[0],
-            payment_mode: 'ONLINE', // Or whatever mode customer used
-            payment_status: 'SUCCESS',
-            paid_at: new Date().toISOString(),
-          });
-        
-        if (transactionError) {
-          console.error('Error creating transaction:', transactionError);
-          // Don't throw - enrollment succeeded
-          toast({
-            title: 'Enrollment Successful',
-            description: 'Enrollment created but payment failed. Please pay separately.',
-          });
-        } else {
-          void createNotification({
-            retailerId: customer.retailer_id,
-            customerId: customer.id,
-            enrollmentId: enrollmentData.id,
-            type: 'PAYMENT_SUCCESS',
-            message: `Payment received: ${customer.full_name} - ₹${initialPaymentNum.toLocaleString()}`,
-            metadata: {
-              type: 'PAYMENT',
-              amount: initialPaymentNum,
-            },
-          });
-          toast({
-            title: 'Success!',
-            description: `Enrolled successfully and paid ₹${initialPaymentNum}`,
-          });
-        }
-      } else {
         toast({
           title: 'Enrollment Successful!',
-          description: 'You can make your first payment from the Payments page',
+          description: 'Redirecting you to complete your first payment.',
         });
+        setTimeout(() => {
+          router.push(`/c/pay/${enrollmentId}`);
+        }, 800);
+        return;
       }
-      
+
+      toast({
+        title: 'Enrollment Successful!',
+        description: 'You can make your first payment from the Payments page',
+      });
+
       // Redirect to customer dashboard
       setTimeout(() => {
         router.push('/c/schemes');
-      }, 1500);
+      }, 1200);
     } catch (error: any) {
       console.error('Error enrolling:', error);
       toast({
