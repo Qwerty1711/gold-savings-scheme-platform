@@ -354,16 +354,18 @@ export default function CustomerSchemesPage() {
         {/* Available Plans */}
         {(() => {
           const enrolledPlanIds = new Set(enrollments.map(e => e.planId).filter(Boolean));
-          const displayPlans = availablePlans.filter(plan => !enrolledPlanIds.has(plan.id));
+          const displayPlans = availablePlans;
           if (displayPlans.length > 0) {
             return (
               <div className="space-y-2">
                 <div className="space-y-1">
-                  <h2 className="text-3xl font-bold bg-gradient-to-r from-gold-600 to-rose-600 bg-clip-text text-transparent">Other Available Plans</h2>
-                  <p className="text-sm text-muted-foreground">Grow more wealth with our other schemes.</p>
+                  <h2 className="text-3xl font-bold bg-gradient-to-r from-gold-600 to-rose-600 bg-clip-text text-transparent">Available Plans</h2>
+                  <p className="text-sm text-muted-foreground">Explore and enroll in any available scheme from your retailer.</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {displayPlans.map(plan => (
+                  {displayPlans.map(plan => {
+                    const alreadyEnrolled = enrolledPlanIds.has(plan.id);
+                    return (
                     <Card key={plan.id} className="group overflow-hidden shadow-xl border-gold-100 hover:scale-[1.02] transition-transform">
                       <div className="h-28 bg-gradient-to-br from-rose-400 via-gold-400 to-amber-600 relative overflow-hidden flex items-center px-5">
                         <div className="absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity duration-300 bg-white"></div>
@@ -379,12 +381,17 @@ export default function CustomerSchemesPage() {
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
-                        <Button className="w-full luxury-gold-gradient text-white hover:opacity-95 rounded-2xl font-semibold py-2 shadow-md" onClick={() => openEnrollDialog(plan)}>
-                          <Plus className="w-5 h-5 mr-2" /> Enroll Now
+                        <Button
+                          className="w-full luxury-gold-gradient text-white hover:opacity-95 rounded-2xl font-semibold py-2 shadow-md"
+                          onClick={() => openEnrollDialog(plan)}
+                          disabled={alreadyEnrolled}
+                        >
+                          <Plus className="w-5 h-5 mr-2" /> {alreadyEnrolled ? 'Already Enrolled' : 'Enroll Now'}
                         </Button>
                       </CardContent>
                     </Card>
-                  ))}
+                  );
+                  })}
                 </div>
               </div>
             );
@@ -394,8 +401,8 @@ export default function CustomerSchemesPage() {
               <div className="w-24 h-24 rounded-full bg-gradient-to-br from-gold-200 via-gold-100 to-rose-100 flex items-center justify-center mb-6">
                 <Sparkles className="w-12 h-12 text-gold-400" />
               </div>
-              <div className="text-2xl font-bold text-gold-700 mb-2">All Plans Enrolled!</div>
-              <div className="text-md text-muted-foreground">You have already enrolled in all available plans. Check back later for new offers.</div>
+              <div className="text-2xl font-bold text-gold-700 mb-2">No Plans Available</div>
+              <div className="text-md text-muted-foreground">There are no self-enrollable plans available right now. Please check back later.</div>
             </div>
           );
         })()}
