@@ -14,6 +14,7 @@ import { ArrowRight, ArrowLeft, User, Phone, CheckCircle, Sparkles } from 'lucid
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { createNotification } from '@/lib/utils/notifications';
+import { fireCelebrationConfetti } from '@/lib/utils/confetti';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/auth-context';
 
@@ -394,6 +395,8 @@ if (customerError) throw customerError;
               },
             });
 
+            fireCelebrationConfetti({ particleCount: 90 });
+
             // Create auth user for customer with PIN (after customer creation)
             // Only if PIN is provided
             if (customerPin && customerPin.length === 6) {
@@ -502,6 +505,8 @@ if (customerError) throw customerError;
 
       const pinStatus = customerPin ? ' Customer can login now.' : ' Set PIN from customer details for login access.';
       toast.success(`Successfully enrolled ${finalCustomerName}!${pinStatus}`);
+
+      fireCelebrationConfetti();
       
       // Reset form and go back to type selection
       resetFormFields();

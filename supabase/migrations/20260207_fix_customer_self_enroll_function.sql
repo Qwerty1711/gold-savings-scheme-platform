@@ -22,6 +22,7 @@ DECLARE
   v_end_date date;
   v_first_billing_month date;
   v_min_amount numeric;
+  v_has_customer_id boolean;
 BEGIN
   -- Get current user
   v_user_id := auth.uid();
@@ -118,23 +119,49 @@ BEGIN
   RETURNING id INTO v_scheme_id;
 
   -- Create first billing month record
-  INSERT INTO enrollment_billing_months (
-    retailer_id,
-    enrollment_id,
-    customer_id,
-    billing_month,
-    due_date,
-    primary_paid,
-    status
-  ) VALUES (
-    v_retailer_id,
-    v_scheme_id,
-    v_customer.id,
-    v_first_billing_month,
-    v_start_date + interval '1 month' - interval '1 day',
-    false,
-    'DUE'
-  );
+  SELECT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'enrollment_billing_months'
+      AND column_name = 'customer_id'
+  ) INTO v_has_customer_id;
+
+  IF v_has_customer_id THEN
+    INSERT INTO enrollment_billing_months (
+      retailer_id,
+      enrollment_id,
+      customer_id,
+      billing_month,
+      due_date,
+      primary_paid,
+      status
+    ) VALUES (
+      v_retailer_id,
+      v_scheme_id,
+      v_customer.id,
+      v_first_billing_month,
+      v_start_date + interval '1 month' - interval '1 day',
+      false,
+      'DUE'
+    );
+  ELSE
+    INSERT INTO enrollment_billing_months (
+      retailer_id,
+      enrollment_id,
+      billing_month,
+      due_date,
+      primary_paid,
+      status
+    ) VALUES (
+      v_retailer_id,
+      v_scheme_id,
+      v_first_billing_month,
+      v_start_date + interval '1 month' - interval '1 day',
+      false,
+      'DUE'
+    );
+  END IF;
 
   RETURN json_build_object(
     'success', true,

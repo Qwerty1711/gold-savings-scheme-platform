@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { supabaseCustomer as supabase } from '@/lib/supabase/client';
 import { createNotification } from '@/lib/utils/notifications';
+import { fireCelebrationConfetti } from '@/lib/utils/confetti';
 import { useCustomerAuth } from '@/lib/contexts/customer-auth-context';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -88,6 +89,12 @@ export default function PaymentPage({ params }: { params: { schemeId: string } }
     void loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customer, authLoading, enrollmentId, router]);
+
+  useEffect(() => {
+    if (success) {
+      fireCelebrationConfetti();
+    }
+  }, [success]);
 
   async function loadData() {
     if (!customer) return;

@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/contexts/auth-context';
 import { toast } from 'sonner';
 import { createNotification } from '@/lib/utils/notifications';
+import { fireCelebrationConfetti } from '@/lib/utils/confetti';
 import { TrendingUp, Plus, Coins, Search, Download, Calendar } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useDebounce } from '@/lib/hooks/use-debounce';
@@ -465,6 +466,7 @@ export default function CollectionsPage() {
       toast.success(
         `✅ Payment recorded: ₹${amountNum.toLocaleString()} = ${gramsAllocated.toFixed(4)}g ${metalName}`
       );
+      fireCelebrationConfetti();
       setAmount('');
       setMode('CASH');
       await loadTransactions(selectedCustomerId);

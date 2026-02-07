@@ -13,6 +13,7 @@ import { Loader2, Package, Sparkles, IndianRupee, Calendar, TrendingUp } from 'l
 import { supabaseCustomer as supabase } from '@/lib/supabase/client';
 import { useCustomerAuth } from '@/lib/contexts/customer-auth-context';
 import { createNotification } from '@/lib/utils/notifications';
+import { fireCelebrationConfetti } from '@/lib/utils/confetti';
 
 type Plan = {
   id: string;
@@ -32,6 +33,7 @@ export default function CustomerEnrollmentPage() {
   const { customer, loading: authLoading } = useCustomerAuth();
   
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [enrolledPlanIds, setEnrolledPlanIds] = useState<Set<string>>(new Set());
   const [selectedPlan, setSelectedPlan] = useState<string>('');
   const [commitmentAmount, setCommitmentAmount] = useState('');
   const [selectedKarat, setSelectedKarat] = useState<string>('22K');
@@ -81,16 +83,29 @@ export default function CustomerEnrollmentPage() {
     setIsLoading(true);
     
     try {
-      const { data, error } = await supabase
-        .from('scheme_templates')
-        .select('id, name, installment_amount, duration_months, bonus_percentage, description, is_active, allow_self_enroll')
-        .eq('retailer_id', customer.retailer_id)
-        .eq('is_active', true)
-        .order('installment_amount', { ascending: true, nullsFirst: false });
-      
-      if (error) throw error;
-      
-      setPlans((data || []) as Plan[]);
+      const [plansResult, enrollmentsResult] = await Promise.all([
+        supabase
+          .from('scheme_templates')
+          .select('id, name, installment_amount, duration_months, bonus_percentage, description, is_active, allow_self_enroll')
+          .eq('retailer_id', customer.retailer_id)
+          .eq('is_active', true)
+          .order('installment_amount', { ascending: true, nullsFirst: false }),
+        supabase
+          .from('enrollments')
+          .select('plan_id, status')
+          .eq('customer_id', customer.id)
+          .eq('retailer_id', customer.retailer_id)
+          .eq('status', 'ACTIVE'),
+      ]);
+
+      if (plansResult.error) throw plansResult.error;
+      if (enrollmentsResult.error) throw enrollmentsResult.error;
+
+      const enrolledIds = new Set((enrollmentsResult.data || []).map((row) => row.plan_id));
+      setEnrolledPlanIds(enrolledIds);
+
+      const availablePlans = (plansResult.data || []).filter((plan) => !enrolledIds.has(plan.id));
+      setPlans(availablePlans as Plan[]);
     } catch (error: any) {
       console.error('Error loading plans:', error);
       toast({
@@ -129,6 +144,15 @@ export default function CustomerEnrollmentPage() {
       toast({
         title: 'Error',
         description: 'Please select a plan',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (enrolledPlanIds.has(selectedPlan)) {
+      toast({
+        title: 'Already Enrolled',
+        description: 'You are already enrolled in this plan. Please select another plan.',
         variant: 'destructive',
       });
       return;
@@ -194,20 +218,11 @@ export default function CustomerEnrollmentPage() {
         },
       });
 
-      if (payNow && initialPaymentNum >= commitmentAmountNum) {
-        toast({
-          title: 'Enrollment Successful!',
-          description: 'Redirecting you to complete your first payment.',
-        });
-        setTimeout(() => {
-          router.push(`/c/pay/${enrollmentId}`);
-        }, 800);
-        return;
-      }
+      fireCelebrationConfetti();
 
       toast({
         title: 'Enrollment Successful!',
-        description: 'You can make your first payment from the Payments page',
+        description: 'Redirecting you to your schemes.',
       });
 
       // Redirect to customer dashboard
