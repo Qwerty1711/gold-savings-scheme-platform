@@ -33,15 +33,14 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
 
-  const lookupCustomerByPhone = async (phoneCandidates: string[], retailerId?: string | null) => {
-    let query = supabaseCustomer
-      .from('customers')
-      .select('id, retailer_id, full_name, phone, email')
-      .in('phone', phoneCandidates);
-    if (retailerId) {
-      query = query.eq('retailer_id', retailerId);
+  const lookupCustomerByPhone = async (phone: string, retailerId?: string | null) => {
+    if (!retailerId) {
+      return { data: null, error: null } as const;
     }
-    return query.maybeSingle();
+    return supabaseCustomer.rpc('lookup_customer_by_phone', {
+      p_retailer_id: retailerId,
+      p_phone: phone,
+    });
   };
 
   // Track hydration - only access browser APIs after mount
@@ -105,21 +104,16 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
               retailerId = retailerBypass;
             }
             const normalizedPhone = phoneBypass.replace(/\D/g, '');
-            const phoneCandidates = [
-              phoneBypass,
-              normalizedPhone,
-              `+91${normalizedPhone}`,
-              `91${normalizedPhone}`,
-            ].filter(Boolean);
-            console.log('[CustomerAuth] Bypass lookup', { phoneCandidates, retailerId });
-            console.log('[CustomerAuth] Running customer bypass query:', { phoneCandidates, retailerId });
-            const result = await lookupCustomerByPhone(phoneCandidates, retailerId);
-            console.log('[CustomerAuth] Customer bypass result:', result);
+            console.log('[CustomerAuth] Bypass lookup', { phone: normalizedPhone || phoneBypass, retailerId });
+            console.log('[CustomerAuth] Running customer bypass query:', { phone: normalizedPhone || phoneBypass, retailerId });
+            const result = await lookupCustomerByPhone(normalizedPhone || phoneBypass, retailerId);
+            const customer = Array.isArray(result.data) ? result.data[0] : result.data;
+            console.log('[CustomerAuth] Customer bypass result:', { data: customer, error: result.error });
             if (isMounted) {
-              if (result.data) {
-                setCustomer(result.data);
+              if (customer) {
+                setCustomer(customer as any);
                 setUser(null); // No supabase user session
-                console.log('[CustomerAuth] Customer set from bypass:', result.data);
+                console.log('[CustomerAuth] Customer set from bypass:', customer);
               } else {
                 setCustomer(null);
                 setError('No customer found for phone: ' + phoneBypass + (retailerId ? ' and retailer: ' + retailerId : ''));
@@ -195,7 +189,11 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
         `+91${normalizedPhone}`,
         `91${normalizedPhone}`,
       ].filter(Boolean);
-      const { data, error } = await lookupCustomerByPhone(phoneCandidates);
+      const { data, error } = await supabaseCustomer
+        .from('customers')
+        .select('id, retailer_id, full_name, phone, email')
+        .in('phone', phoneCandidates)
+        .maybeSingle();
       if (error) {
         console.error('Customer hydrate error:', error);
         setError('Customer hydrate error: ' + error.message);

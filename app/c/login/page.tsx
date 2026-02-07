@@ -58,20 +58,19 @@ export default function CustomerLoginPage() {
       `91${normalizedPhone}`,
     ].filter(Boolean);
     console.log('[CustomerLogin] Attempt', { retailerId, phone, normalizedPhone, phoneCandidates });
-    // Try to find customer by retailer and phone (customers.phone)
     const { data, error } = await supabase
-      .from('customers')
-      .select('id, retailer_id, phone, full_name')
-      .eq('retailer_id', retailerId)
-      .in('phone', phoneCandidates)
-      .maybeSingle();
-    console.log('[CustomerLogin] Lookup result', { data, error });
+      .rpc('lookup_customer_by_phone', {
+        p_retailer_id: retailerId,
+        p_phone: normalizedPhone || phone,
+      });
+    const customer = Array.isArray(data) ? data[0] : data;
+    console.log('[CustomerLogin] Lookup result', { data: customer, error });
     if (error) {
       setError('Login failed. Please try again.');
       setLoading(false);
       return;
     }
-    if (!data) {
+    if (!customer) {
       setError('No customer found for this retailer and phone number.');
       setLoading(false);
       return;
