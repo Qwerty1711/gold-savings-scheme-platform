@@ -19,6 +19,15 @@ WHERE up.role = 'CUSTOMER'
   AND up.retailer_id = c.retailer_id
   AND c.user_id IS NULL;
 
+-- 3) Backfill user_profiles.customer_id from customers when missing
+UPDATE user_profiles up
+SET customer_id = c.id
+FROM customers c
+WHERE up.role = 'CUSTOMER'
+  AND up.customer_id IS NULL
+  AND up.phone = c.phone
+  AND up.retailer_id = c.retailer_id;
+
 -- Customers table
 ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Customers can view own profile" ON customers;
@@ -34,6 +43,9 @@ BEGIN
       USING (
         user_id = auth.uid()
         OR id = auth.uid()
+        OR id IN (SELECT customer_id FROM user_profiles WHERE id = auth.uid())
+        OR (phone IS NOT NULL AND phone = (auth.jwt() ->> 'phone'))
+        OR (email IS NOT NULL AND email = (auth.jwt() ->> 'email'))
       );
   ELSE
     CREATE POLICY "Customers can view own profile"
@@ -41,6 +53,9 @@ BEGIN
       TO authenticated
       USING (
         id = auth.uid()
+        OR id IN (SELECT customer_id FROM user_profiles WHERE id = auth.uid())
+        OR (phone IS NOT NULL AND phone = (auth.jwt() ->> 'phone'))
+        OR (email IS NOT NULL AND email = (auth.jwt() ->> 'email'))
       );
   END IF;
 END $$;
@@ -49,23 +64,26 @@ END $$;
 ALTER TABLE scheme_templates ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Customers can view enrollable plans" ON scheme_templates;
 DROP POLICY IF EXISTS "Customers can view relevant plans" ON scheme_templates;
-CREATE POLICY "Customers can view relevant plans"
-  ON scheme_templates FOR SELECT
-  TO authenticated
-  USING (
-    (is_active = true AND allow_self_enroll = true)
-    OR EXISTS (
-      SELECT 1
-      FROM enrollments e
-      WHERE e.plan_id = scheme_templates.id
-        AND e.customer_id IN (
-          SELECT id
-          FROM customers
-          WHERE user_id = auth.uid()
-             OR id = auth.uid()
+    CREATE POLICY "Customers can view relevant plans"
+      ON scheme_templates FOR SELECT
+      TO authenticated
+      USING (
+        (is_active = true AND allow_self_enroll = true)
+        OR EXISTS (
+          SELECT 1
+          FROM enrollments e
+          WHERE e.plan_id = scheme_templates.id
+            AND e.customer_id IN (
+              SELECT id
+              FROM customers
+                WHERE user_id = auth.uid()
+                  OR id = auth.uid()
+                  OR id IN (SELECT customer_id FROM user_profiles WHERE id = auth.uid())
+                  OR (phone IS NOT NULL AND phone = (auth.jwt() ->> 'phone'))
+                  OR (email IS NOT NULL AND email = (auth.jwt() ->> 'email'))
+            )
         )
-    )
-  );
+      );
 
 -- Enrollments
 DROP POLICY IF EXISTS "Customers can view own enrollments" ON enrollments;
@@ -82,8 +100,11 @@ BEGIN
         customer_id IN (
           SELECT id
           FROM customers
-          WHERE user_id = auth.uid()
+           WHERE user_id = auth.uid()
              OR id = auth.uid()
+             OR id IN (SELECT customer_id FROM user_profiles WHERE id = auth.uid())
+             OR (phone IS NOT NULL AND phone = (auth.jwt() ->> 'phone'))
+             OR (email IS NOT NULL AND email = (auth.jwt() ->> 'email'))
         )
       );
   END IF;
@@ -104,8 +125,11 @@ BEGIN
         customer_id IN (
           SELECT id
           FROM customers
-          WHERE user_id = auth.uid()
+           WHERE user_id = auth.uid()
              OR id = auth.uid()
+             OR id IN (SELECT customer_id FROM user_profiles WHERE id = auth.uid())
+             OR (phone IS NOT NULL AND phone = (auth.jwt() ->> 'phone'))
+             OR (email IS NOT NULL AND email = (auth.jwt() ->> 'email'))
         )
       );
   END IF;
@@ -126,8 +150,11 @@ BEGIN
         customer_id IN (
           SELECT id
           FROM customers
-          WHERE user_id = auth.uid()
+           WHERE user_id = auth.uid()
              OR id = auth.uid()
+             OR id IN (SELECT customer_id FROM user_profiles WHERE id = auth.uid())
+             OR (phone IS NOT NULL AND phone = (auth.jwt() ->> 'phone'))
+             OR (email IS NOT NULL AND email = (auth.jwt() ->> 'email'))
         )
       );
   END IF;
@@ -148,8 +175,11 @@ BEGIN
         customer_id IN (
           SELECT id
           FROM customers
-          WHERE user_id = auth.uid()
+           WHERE user_id = auth.uid()
              OR id = auth.uid()
+             OR id IN (SELECT customer_id FROM user_profiles WHERE id = auth.uid())
+             OR (phone IS NOT NULL AND phone = (auth.jwt() ->> 'phone'))
+             OR (email IS NOT NULL AND email = (auth.jwt() ->> 'email'))
         )
       );
   END IF;

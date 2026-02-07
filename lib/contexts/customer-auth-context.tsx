@@ -261,6 +261,32 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
       setCustomer(null);
       return;
     }
+
+    // Prefer user_profiles link (customer_id)
+    try {
+      const { data: profile } = await supabaseCustomer
+        .from('user_profiles')
+        .select('id, retailer_id, customer_id, full_name, phone')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (profile?.customer_id) {
+        const { data: customerData, error: customerError } = await supabaseCustomer
+          .from('customers')
+          .select('id, retailer_id, full_name, phone, email')
+          .eq('id', profile.customer_id)
+          .maybeSingle();
+
+        if (customerError) {
+          console.error('Customer hydrate error (by profile):', customerError);
+        } else if (customerData) {
+          setCustomer(customerData as any);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('Customer hydrate profile lookup failed:', err);
+    }
     // Prefer phone, fallback to email
     if (user.phone) {
       const normalizedPhone = user.phone.replace(/\D/g, '');
