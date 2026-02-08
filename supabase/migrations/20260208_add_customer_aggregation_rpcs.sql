@@ -91,10 +91,6 @@ BEGIN
           AND e.status = 'ACTIVE'
       ), 0),
       'overdueCount', COALESCE((SELECT overdue_count FROM overdue), 0),
-      'totalSchemeValue', COALESCE((
-        SELECT SUM(COALESCE(e.commitment_amount, e.installment_amount, 0) * COALESCE(e.duration_months, 0))
-        FROM enrollments e
-      ), 0),
       'activeEnrollments', COALESCE((SELECT COUNT(*) FROM enrollments e WHERE e.status = 'ACTIVE'), 0),
       'currentRates', jsonb_build_object(
         'k18', (

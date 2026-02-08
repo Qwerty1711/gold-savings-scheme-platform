@@ -27,7 +27,6 @@ type CustomerMetrics = {
   silverAllocated: number;
   duesOutstanding: number;
   overdueCount: number;
-  totalSchemeValue: number;
   activeEnrollments: number;
   currentRates: {
     k18: { rate: number; validFrom: string } | null;
@@ -164,7 +163,6 @@ export default function CustomerPulsePage() {
             silverAllocated: safeNumber(metricsData.silverAllocated),
             duesOutstanding: safeNumber(metricsData.duesOutstanding),
             overdueCount: safeNumber(metricsData.overdueCount),
-            totalSchemeValue: safeNumber(metricsData.totalSchemeValue),
             activeEnrollments: safeNumber(metricsData.activeEnrollments),
             currentRates: {
               k18: metricsData.currentRates?.k18 ?? null,
@@ -344,7 +342,6 @@ export default function CustomerPulsePage() {
         silverAllocated,
         duesOutstanding,
         overdueCount: overdueResult.count || 0,
-        totalSchemeValue,
         activeEnrollments: (enrollments || []).filter((e: any) => e.status === 'ACTIVE').length,
         currentRates,
       } as CustomerMetrics;
@@ -512,7 +509,7 @@ export default function CustomerPulsePage() {
                 <p className="text-xs text-muted-foreground">Dues Outstanding</p>
                 <p className="text-xl font-bold">₹{metrics?.duesOutstanding.toLocaleString() || 0}</p>
                 {(metrics?.overdueCount || 0) > 0 && (
-                  <Badge variant="destructive" className="text-xs mt-1">{metrics?.overdueCount} overdue</Badge>
+                  <Badge variant="destructive" className="text-xs mt-1">{metrics?.overdueCount} days overdue</Badge>
                 )}
               </div>
             </div>
@@ -526,9 +523,9 @@ export default function CustomerPulsePage() {
                 <Gift className="w-5 h-5 text-purple-600" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Total Scheme Value</p>
-                <p className="text-xl font-bold">₹{metrics?.totalSchemeValue.toLocaleString() || 0}</p>
-                <p className="text-xs text-muted-foreground">{metrics?.activeEnrollments || 0} active</p>
+                <p className="text-xs text-muted-foreground">Active Schemes</p>
+                <p className="text-xl font-bold">{metrics?.activeEnrollments || 0}</p>
+                <p className="text-xs text-muted-foreground">Currently active</p>
               </div>
             </div>
           </CardContent>
