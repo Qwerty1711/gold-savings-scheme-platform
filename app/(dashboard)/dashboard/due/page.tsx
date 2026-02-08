@@ -98,7 +98,7 @@ export default function DuePage() {
           plan_id,
           commitment_amount,
           customers(id, full_name, phone),
-          scheme_templates(name, monthly_amount, installment_amount)
+          scheme_templates(name, installment_amount)
         `)
         .in('id', enrollmentIds);
 
@@ -116,7 +116,7 @@ export default function DuePage() {
             monthly_amount:
               typeof e.commitment_amount === 'number' && e.commitment_amount > 0
                 ? e.commitment_amount
-                : e.scheme_templates?.monthly_amount ?? e.scheme_templates?.installment_amount ?? 0,
+                : e.scheme_templates?.installment_amount ?? 0,
           },
         ])
       );

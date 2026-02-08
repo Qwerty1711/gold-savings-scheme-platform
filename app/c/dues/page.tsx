@@ -26,7 +26,6 @@ type DueRow = {
 		commitment_amount: number | null;
 		scheme_templates: {
 			name: string;
-			monthly_amount?: number | null;
 			installment_amount?: number | null;
 		} | null;
 		status?: string | null;
@@ -59,9 +58,9 @@ export default function CustomerDuesPage() {
 
 	function buildPaymentUrl(amount: number, enrollmentId?: string | null) {
 		const params = new URLSearchParams();
-		if (enrollmentId) params.set('enrollmentId', enrollmentId);
 		params.set('amount', String(amount));
-		return `/c/payments?${params.toString()}`;
+		if (enrollmentId) params.set('enrollmentId', enrollmentId);
+		return `/c/wallet?${params.toString()}`;
 	}
 
 	useEffect(() => {
@@ -99,7 +98,7 @@ export default function CustomerDuesPage() {
 						'billing_month',
 						'due_date',
 						'status',
-						'enrollments!inner(commitment_amount, status, scheme_templates(name, monthly_amount, installment_amount))',
+						'enrollments!inner(commitment_amount, status, scheme_templates(name, installment_amount))',
 					].join(',')
 				)
 				.eq('primary_paid', false)
@@ -125,7 +124,7 @@ export default function CustomerDuesPage() {
 				const amountDue =
 					(typeof enrollment?.commitment_amount === 'number' && enrollment.commitment_amount > 0
 						? enrollment.commitment_amount
-						: enrollment?.scheme_templates?.monthly_amount ?? enrollment?.scheme_templates?.installment_amount) || 0;
+						: enrollment?.scheme_templates?.installment_amount) || 0;
 
 				return {
 					...row,

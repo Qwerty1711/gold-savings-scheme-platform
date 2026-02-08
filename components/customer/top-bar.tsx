@@ -6,10 +6,18 @@ import { useBranding } from '@/lib/contexts/branding-context';
 import { AnimatedLogo } from '@/components/ui/animated-logo';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { useCustomerAuth } from '@/lib/contexts/customer-auth-context';
 
 export function CustomerTopBar() {
   const { branding } = useBranding();
   const router = useRouter();
+  const { signOut } = useCustomerAuth();
 
   return (
     <div className="sticky top-0 z-50 w-full backdrop-blur-2xl bg-white/85 border-b border-gold-300/40">
@@ -35,14 +43,26 @@ export function CustomerTopBar() {
             {/* Use Bell icon for notifications */}
             <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-gold-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
           </Button>
-          <Button 
-            variant="outline" 
-            size="icon" 
-            className="rounded-2xl border-gold-300/50 hover:bg-gold-50"
-            onClick={() => router.push('/c/profile')}
-          >
-            <User className="w-5 h-5 text-gold-600" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="rounded-2xl border-gold-300/50 hover:bg-gold-50"
+                aria-label="Profile menu"
+              >
+                <User className="w-5 h-5 text-gold-600" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem onClick={() => router.push('/c/profile')}>
+                My Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void signOut()}>
+                Sign Out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </div>

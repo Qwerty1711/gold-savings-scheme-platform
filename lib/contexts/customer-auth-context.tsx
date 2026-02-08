@@ -428,8 +428,27 @@ export function CustomerAuthProvider({ children }: { children: React.ReactNode }
     await supabaseCustomer.auth.signOut();
     setUser(null);
     setCustomer(null);
+    try {
+      localStorage.removeItem('customer_phone_bypass');
+      localStorage.removeItem('customer_retailer_bypass');
+      localStorage.removeItem('customer_bypass_payload');
+    } catch {
+      // ignore
+    }
+    try {
+      sessionStorage.removeItem('customer_phone_bypass');
+      sessionStorage.removeItem('customer_retailer_bypass');
+      sessionStorage.removeItem('customer_bypass_payload');
+    } catch {
+      // ignore
+    }
+    if (typeof document !== 'undefined') {
+      document.cookie = 'customer_phone_bypass=; path=/; max-age=0';
+      document.cookie = 'customer_retailer_bypass=; path=/; max-age=0';
+      document.cookie = 'customer_bypass_payload=; path=/; max-age=0';
+    }
     // Do NOT clear retailer_id from localStorage on sign out
-    router.push('/c/login');
+    router.replace('/c/login');
   };
 
   return (

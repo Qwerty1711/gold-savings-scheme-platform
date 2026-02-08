@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Sparkles, AlertCircle, CheckCircle, Calendar, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import { supabaseCustomer as supabase } from '@/lib/supabase/client';
 import { createNotification } from '@/lib/utils/notifications';
 import { fireCelebrationConfetti } from '@/lib/utils/confetti';
 import { useCustomerAuth } from '@/lib/contexts/customer-auth-context';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CustomerLoadingSkeleton } from '@/components/customer/loading-skeleton';
@@ -58,6 +58,9 @@ export default function PaymentPage() {
     : params?.schemeId;
 
   const { customer, loading: authLoading } = useCustomerAuth();
+  const searchParams = useSearchParams();
+  const prefillAmount = searchParams.get('amount');
+  const prefillAppliedRef = useRef(false);
 
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [goldRate, setGoldRate] = useState<GoldRate | null>(null);
@@ -75,7 +78,6 @@ export default function PaymentPage() {
   const [monthlyInstallmentPaid, setMonthlyInstallmentPaid] = useState(false);
 
   const router = useRouter();
-  const [redirecting, setRedirecting] = useState(true);
 
   const currentMonthStr = useMemo(() => {
     const today = new Date();
@@ -85,15 +87,6 @@ export default function PaymentPage() {
   }, []);
 
   useEffect(() => {
-    if (!enrollmentId) {
-      setRedirecting(false);
-      return;
-    }
-    router.replace(`/c/wallet?enrollmentId=${enrollmentId}`);
-  }, [enrollmentId, router]);
-
-  useEffect(() => {
-    if (redirecting) return;
     if (authLoading) return;
     if (!customer) {
       router.push('/c/login');
@@ -106,7 +99,28 @@ export default function PaymentPage() {
     }
     void loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customer, authLoading, enrollmentId, router, redirecting]);
+  }, [customer, authLoading, enrollmentId, router]);
+
+  useEffect(() => {
+    if (prefillAppliedRef.current) return;
+    if (!prefillAmount) return;
+    const normalized = prefillAmount.replace(/[^0-9.]/g, '');
+    if (!normalized) return;
+    setAmount(normalized);
+    prefillAppliedRef.current = true;
+  }, [prefillAmount]);
+
+  useEffect(() => {
+    if (!prefillAmount) return;
+    if (paymentType) return;
+    if (!enrollment) return;
+    if (monthlyInstallmentPaid) {
+      setPaymentType('TOP_UP');
+      return;
+    }
+    setPaymentType('PRIMARY_INSTALLMENT');
+    setError('');
+  }, [prefillAmount, paymentType, enrollment, monthlyInstallmentPaid]);
 
   useEffect(() => {
     if (success) {
@@ -338,14 +352,6 @@ export default function PaymentPage() {
   }
 
   const calculatedGrams = amount && goldRate ? parseFloat(amount) / goldRate.rate_per_gram : 0;
-
-  if (redirecting) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-pulse text-xl gold-text">Redirecting to collections...</div>
-      </div>
-    );
-  }
 
   if (loading) {
     return <CustomerLoadingSkeleton title="Loading payment details..." />;

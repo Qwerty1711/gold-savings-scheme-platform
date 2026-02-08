@@ -14,9 +14,7 @@ import { CustomerLoadingSkeleton } from '@/components/customer/loading-skeleton'
 type CustomerProfile = {
   id: string;
   full_name: string | null;
-  phone: string | null;
   email: string | null;
-  pan_number: string | null;
   address: string | null;
   nominee_name: string | null;
   nominee_relation: string | null;
@@ -24,12 +22,13 @@ type CustomerProfile = {
 };
 
 export default function CustomerProfilePage() {
-  const { customer, loading: authLoading, signOut } = useCustomerAuth();
+  const { customer, loading: authLoading } = useCustomerAuth();
   const { toast } = useToast();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
+  const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
   const [nomineeName, setNomineeName] = useState('');
   const [nomineeRelation, setNomineeRelation] = useState('');
@@ -47,7 +46,7 @@ export default function CustomerProfilePage() {
       setLoading(true);
       const { data, error } = await supabaseCustomer
         .from('customers')
-        .select('id, full_name, phone, email, pan_number, address, nominee_name, nominee_relation, nominee_phone')
+        .select('id, full_name, email, address, nominee_name, nominee_relation, nominee_phone')
         .eq('id', customer.id)
         .maybeSingle();
 
@@ -66,6 +65,7 @@ export default function CustomerProfilePage() {
 
       const profileData = (data || null) as CustomerProfile | null;
       setProfile(profileData);
+      setEmail(profileData?.email || '');
       setAddress(profileData?.address || '');
       setNomineeName(profileData?.nominee_name || '');
       setNomineeRelation(profileData?.nominee_relation || '');
@@ -86,32 +86,42 @@ export default function CustomerProfilePage() {
     if (!customer?.id) return;
 
     setSaving(true);
-    const { error } = await supabaseCustomer
-      .from('customers')
-      .update({
-        address: address.trim() || null,
-        nominee_name: nomineeName.trim() || null,
-        nominee_relation: nomineeRelation.trim() || null,
-        nominee_phone: nomineePhone.trim() || null,
-      })
-      .eq('id', customer.id);
+    try {
+      const { error } = await supabaseCustomer
+        .from('customers')
+        .update({
+          email: email.trim() || null,
+          address: address.trim() || null,
+          nominee_name: nomineeName.trim() || null,
+          nominee_relation: nomineeRelation.trim() || null,
+          nominee_phone: nomineePhone.trim() || null,
+        })
+        .eq('id', customer.id);
 
-    if (error) {
-      console.error('Profile update error:', error);
+      if (error) {
+        console.error('Profile update error:', error);
+        toast({
+          title: 'Update failed',
+          description: error.message || 'Could not save your changes',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      toast({
+        title: 'Profile updated',
+        description: 'You have successfully updated your profile',
+      });
+    } catch (err: any) {
+      console.error('Profile update exception:', err);
       toast({
         title: 'Update failed',
-        description: error.message || 'Could not save your changes',
+        description: err?.message || 'Could not save your changes',
         variant: 'destructive',
       });
+    } finally {
       setSaving(false);
-      return;
     }
-
-    toast({
-      title: 'Profile updated',
-      description: 'Your address and nominee details were saved.',
-    });
-    setSaving(false);
   }
 
   if (authLoading || loading) {
@@ -133,16 +143,13 @@ export default function CustomerProfilePage() {
                 <Input value={profile?.full_name || ''} disabled />
               </div>
               <div className="space-y-2">
-                <Label>Phone Number</Label>
-                <Input value={profile?.phone || ''} disabled />
-              </div>
-              <div className="space-y-2">
-                <Label>PAN Number</Label>
-                <Input value={profile?.pan_number || ''} disabled />
-              </div>
-              <div className="space-y-2">
                 <Label>Email</Label>
-                <Input value={profile?.email || ''} disabled />
+                <Input
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  type="email"
+                />
               </div>
             </div>
 
@@ -193,13 +200,6 @@ export default function CustomerProfilePage() {
                 disabled={saving}
               >
                 {saving ? 'Saving...' : 'Save Changes'}
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full md:w-auto"
-                onClick={() => signOut()}
-              >
-                Sign Out
               </Button>
             </div>
           </CardContent>

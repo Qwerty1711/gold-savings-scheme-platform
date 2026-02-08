@@ -79,7 +79,7 @@ export default function CustomerCollectionsPage() {
   const prefillAppliedRef = useRef(false);
 
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
-  const [selectedEnrollmentId, setSelectedEnrollmentId] = useState('');
+  const [selectedEnrollmentId, setSelectedEnrollmentId] = useState(preselectEnrollmentId ?? '');
   const [goldRate, setGoldRate] = useState<GoldRate | null>(null);
   const [amount, setAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CHEQUE' | 'CREDIT_CARD' | 'DIGITAL' | 'UPI'>('CASH');
@@ -153,7 +153,7 @@ export default function CustomerCollectionsPage() {
     void loadGoldRate();
     void loadMonthlyPaymentInfo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedEnrollmentId]);
+  }, [selectedEnrollmentId, selectedEnrollment]);
 
   useEffect(() => {
     if (!customer?.id || enrollments.length === 0) return;
