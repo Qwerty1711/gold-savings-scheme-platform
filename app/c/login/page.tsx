@@ -47,6 +47,8 @@ export default function CustomerLoginPage() {
     document.cookie = 'customer_phone_bypass=; path=/; max-age=0';
     document.cookie = 'customer_retailer_bypass=; path=/; max-age=0';
     document.cookie = 'customer_bypass_payload=; path=/; max-age=0';
+    // Ensure any previous customer session is cleared before logging in a new customer
+    void supabase.auth.signOut();
     setMounted(true);
   }, []);
 
@@ -85,57 +87,52 @@ export default function CustomerLoginPage() {
     setError(null);
     setLoading(true);
     const normalizedPhone = phone.replace(/\D/g, '');
-    const phoneCandidates = [
-      phone,
-      normalizedPhone,
-      `+91${normalizedPhone}`,
-      `91${normalizedPhone}`,
-    ].filter(Boolean);
-    console.log('[CustomerLogin] Attempt', { retailerId, phone, normalizedPhone, phoneCandidates });
-    const { data, error } = await supabase
-      .rpc('lookup_customer_by_phone', {
-        p_retailer_id: retailerId,
-        p_phone: normalizedPhone || phone,
+    console.log('[CustomerLogin] Dev bypass login attempt', { retailerId, phone, normalizedPhone });
+
+    try {
+      const res = await fetch('/api/auth/dev-bypass-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: normalizedPhone || phone,
+          retailer_id: retailerId,
+        }),
       });
-    const customer = Array.isArray(data) ? data[0] : data;
-    console.log('[CustomerLogin] Lookup result', { data: customer, error });
-    if (error) {
-      setError('Login failed. Please try again.');
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data?.error || 'Login failed. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      const { email, password } = data || {};
+      if (!email || !password) {
+        setError('Invalid login response.');
+        setLoading(false);
+        return;
+      }
+
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) {
+        setError(signInError.message || 'Login failed. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      console.log('[CustomerLogin] Dev bypass authenticated, redirecting to /c/pulse');
       setLoading(false);
-      return;
-    }
-    if (!customer) {
-      setError('No customer found for this retailer and phone number.');
+      window.location.assign('/c/pulse');
+    } catch (err: any) {
+      console.error('[CustomerLogin] Dev bypass failed', err);
+      setError(err?.message || 'Login failed. Please try again.');
       setLoading(false);
-      return;
     }
-    // Save bypass info and reload
-    const bypassPhone = normalizedPhone || phone;
-    const bypassPayload = JSON.stringify(customer);
-    try {
-      localStorage.setItem('customer_phone_bypass', bypassPhone);
-      localStorage.setItem('customer_retailer_bypass', retailerId);
-      localStorage.setItem('customer_bypass_payload', bypassPayload);
-    } catch (storageError) {
-      console.warn('[CustomerLogin] localStorage unavailable', storageError);
-    }
-    try {
-      sessionStorage.setItem('customer_phone_bypass', bypassPhone);
-      sessionStorage.setItem('customer_retailer_bypass', retailerId);
-      sessionStorage.setItem('customer_bypass_payload', bypassPayload);
-    } catch (storageError) {
-      console.warn('[CustomerLogin] sessionStorage unavailable', storageError);
-    }
-    try {
-      document.cookie = `customer_phone_bypass=${encodeURIComponent(bypassPhone)}; path=/; max-age=3600`;
-      document.cookie = `customer_retailer_bypass=${encodeURIComponent(retailerId)}; path=/; max-age=3600`;
-      document.cookie = `customer_bypass_payload=${encodeURIComponent(bypassPayload)}; path=/; max-age=3600`;
-    } catch (cookieError) {
-      console.warn('[CustomerLogin] cookie set failed', cookieError);
-    }
-    console.log('[CustomerLogin] Bypass stored, redirecting to /c/pulse');
-    setLoading(false);
-    window.location.assign('/c/pulse');
   };
 
   // Hydration guard: only render on client
