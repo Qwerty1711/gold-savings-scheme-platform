@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -75,6 +75,8 @@ export default function CustomerCollectionsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectEnrollmentId = searchParams.get('enrollmentId');
+  const prefillAmount = searchParams.get('amount');
+  const prefillAppliedRef = useRef(false);
 
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [selectedEnrollmentId, setSelectedEnrollmentId] = useState('');
@@ -138,6 +140,15 @@ export default function CustomerCollectionsPage() {
   }, [preselectEnrollmentId, enrollments, selectedEnrollmentId]);
 
   useEffect(() => {
+    if (prefillAppliedRef.current) return;
+    if (!prefillAmount) return;
+    const normalized = prefillAmount.replace(/[^0-9.]/g, '');
+    if (!normalized) return;
+    setAmount(normalized);
+    prefillAppliedRef.current = true;
+  }, [prefillAmount]);
+
+  useEffect(() => {
     if (!selectedEnrollmentId || !customer?.retailer_id) return;
     void loadGoldRate();
     void loadMonthlyPaymentInfo();
@@ -149,6 +160,19 @@ export default function CustomerCollectionsPage() {
     void loadTransactions(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customer?.id, enrollments, timeFilter, customStart, customEnd]);
+
+  useEffect(() => {
+    if (!selectedEnrollmentId) {
+      setLastPaymentGrams(null);
+      return;
+    }
+    const lastTxn = recentTransactions.find((txn) => txn.enrollment_id === selectedEnrollmentId);
+    if (lastTxn) {
+      setLastPaymentGrams(safeNumber(lastTxn.grams_allocated_snapshot));
+    } else {
+      setLastPaymentGrams(null);
+    }
+  }, [recentTransactions, selectedEnrollmentId]);
 
   async function loadEnrollments() {
     if (!customer) return;
@@ -553,8 +577,9 @@ export default function CustomerCollectionsPage() {
 
       setLastPaymentGrams(gramsAllocated);
       setAmount('');
-      await loadMonthlyPaymentInfo();
-      await loadTransactions();
+      setSubmitting(false);
+      void loadMonthlyPaymentInfo();
+      void loadTransactions();
     } catch (error: any) {
       console.error('Payment error:', error);
       toast({

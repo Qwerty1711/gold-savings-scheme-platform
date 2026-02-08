@@ -62,6 +62,12 @@ type EnrollmentCard = {
 
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+function normalizePaidMonths(paidMonths: unknown): Set<string> {
+  if (paidMonths instanceof Set) return paidMonths as Set<string>;
+  if (Array.isArray(paidMonths)) return new Set(paidMonths.filter(v => typeof v === 'string'));
+  return new Set<string>();
+}
+
 export default function CustomerSchemesPage() {
   const { branding, loading: brandingLoading } = useBranding();
   const { customer, user, loading: authLoading } = useCustomerAuth();
@@ -79,9 +85,13 @@ export default function CustomerSchemesPage() {
       return;
     }
     const cacheKey = `customer:schemes:${customer.id}`;
-    const cached = readCustomerCache<{ enrollments: EnrollmentCard[]; availablePlans: Plan[] }>(cacheKey);
+    const cached = readCustomerCache<{ enrollments: Array<EnrollmentCard & { paidMonths?: string[] | Set<string> }>; availablePlans: Plan[] }>(cacheKey);
     if (cached) {
-      setEnrollments(cached.enrollments);
+      const normalizedEnrollments = cached.enrollments.map(enrollment => ({
+        ...enrollment,
+        paidMonths: normalizePaidMonths((enrollment as { paidMonths?: unknown }).paidMonths),
+      }));
+      setEnrollments(normalizedEnrollments);
       setAvailablePlans(cached.availablePlans);
       setLoading(false);
       void loadData(true);
@@ -237,7 +247,11 @@ export default function CustomerSchemesPage() {
 
       if (customer?.id) {
         const cacheKey = `customer:schemes:${customer.id}`;
-        writeCustomerCache(cacheKey, { enrollments: cards, availablePlans: allPlans.filter(p => p.is_active) });
+        const cacheEnrollments = cards.map(enrollment => ({
+          ...enrollment,
+          paidMonths: Array.from(enrollment.paidMonths ?? []),
+        }));
+        writeCustomerCache(cacheKey, { enrollments: cacheEnrollments, availablePlans: allPlans.filter(p => p.is_active) });
       }
     } catch (err) {
       console.error('Load data error:', err);

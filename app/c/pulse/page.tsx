@@ -269,7 +269,7 @@ export default function CustomerPulsePage() {
               .select('enrollment_id')
               .in('enrollment_id', enrollmentIds)
               .eq('primary_paid', false)
-              .gte('due_date', todayDateISO);
+              .lte('due_date', todayDateISO);
             if (retailerId) {
               duesQuery = duesQuery.eq('retailer_id', retailerId);
             }

@@ -12,7 +12,7 @@ const allNavItems = [
   { name: 'PLANS', href: '/plans', icon: Sparkles, roles: ['ADMIN', 'STAFF'] },
   { name: 'PAYMENTS', href: '/payments', icon: Users, roles: ['ADMIN', 'STAFF', 'CUSTOMER'] },
   { name: 'REDEEM', href: '/redemptions', icon: Award, roles: ['ADMIN', 'STAFF', 'CUSTOMER'] },
-  { name: 'DUES', href: '/pulse', icon: AlertCircle, roles: ['ADMIN', 'STAFF', 'CUSTOMER'] },
+  { name: 'DUES', href: '/dashboard/due', icon: AlertCircle, roles: ['ADMIN', 'STAFF', 'CUSTOMER'] },
   { name: 'GROWTH', href: '/pulse', icon: TrendingUp, roles: ['ADMIN'] },
 ];
 

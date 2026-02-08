@@ -10,9 +10,8 @@ const navItems = [
   { href: '/c/pulse', icon: Activity, label: 'Pulse' },
   { href: '/c/schemes', icon: ScrollText, label: 'Plans' },
   { href: '/c/wallet', icon: Wallet, label: 'Collections' },
-  // Redemptions and Dues can be routed to /c/schemes or /c/pulse until implemented
-  { href: '/c/schemes', icon: Gift, label: 'Redemptions' },
-  { href: '/c/pulse', icon: AlertCircle, label: 'Dues' },
+  { href: '/c/redemptions', icon: Gift, label: 'Redemptions' },
+  { href: '/c/dues', icon: AlertCircle, label: 'Dues' },
 ];
 
 export function CustomerMobileNav() {

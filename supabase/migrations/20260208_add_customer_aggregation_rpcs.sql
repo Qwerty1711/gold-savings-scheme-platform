@@ -60,7 +60,7 @@ BEGIN
     FROM enrollment_billing_months ebm
     WHERE ebm.enrollment_id IN (SELECT id FROM enrollments)
       AND ebm.primary_paid = false
-      AND ebm.due_date >= v_today
+      AND ebm.due_date <= v_today
   ),
   overdue AS (
     SELECT COUNT(*)::int AS overdue_count
