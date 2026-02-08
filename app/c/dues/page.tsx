@@ -103,7 +103,7 @@ export default function CustomerDuesPage() {
 					].join(',')
 				)
 				.eq('primary_paid', false)
-				.lt('due_date', todayISO)
+				.lte('due_date', todayISO)
 				.eq('enrollments.customer_id', customerId)
 				.eq('enrollments.status', 'ACTIVE')
 				.order('due_date', { ascending: true });
@@ -220,12 +220,17 @@ export default function CustomerDuesPage() {
 						{dues.map((row) => {
 							const dueDate = row.due_date ? new Date(row.due_date) : null;
 							const schemeName = row.enrollments?.scheme_templates?.name || 'Gold Plan';
+							const isOverdue = row.days_overdue > 0;
 							const isCritical = row.days_overdue > 14;
 							return (
 								<Card
 									key={row.id}
 									className={`glass-card border-2 ${
-										isCritical ? 'border-red-200 bg-red-50/60' : 'border-yellow-100'
+										isCritical
+											? 'border-red-200 bg-red-50/60'
+											: isOverdue
+											? 'border-orange-100 bg-orange-50/40'
+											: 'border-yellow-100'
 									}`}
 								>
 									<CardHeader className="pb-3">
@@ -244,12 +249,18 @@ export default function CustomerDuesPage() {
 										<div>
 											<p className="text-sm text-muted-foreground">Amount</p>
 											<p className="text-2xl font-bold">₹{Number(row.amount_due || 0).toLocaleString()}</p>
-											<p className="text-sm text-muted-foreground mt-1">
-												Overdue by {row.days_overdue} day{row.days_overdue === 1 ? '' : 's'}
-											</p>
+											{isOverdue ? (
+												<p className="text-sm text-muted-foreground mt-1">
+													Overdue by {row.days_overdue} day{row.days_overdue === 1 ? '' : 's'}
+												</p>
+											) : (
+												<p className="text-sm text-muted-foreground mt-1">Due today</p>
+											)}
 										</div>
 										<div className="flex items-center gap-3">
-											<Badge variant="destructive">Overdue</Badge>
+											<Badge variant={isOverdue ? 'destructive' : 'secondary'}>
+												{isOverdue ? 'Overdue' : 'Due'}
+											</Badge>
 											<Button
 												onClick={() =>
 													router.push(

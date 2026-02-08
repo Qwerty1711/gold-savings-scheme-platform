@@ -56,18 +56,24 @@ BEGIN
       AND t.txn_type IN ('PRIMARY_INSTALLMENT', 'TOP_UP')
   ),
   dues AS (
-    SELECT ebm.enrollment_id
+    SELECT
+      ebm.enrollment_id,
+      COALESCE(e.commitment_amount, e.installment_amount, 0) AS amount_due
     FROM enrollment_billing_months ebm
+    JOIN enrollments e ON e.id = ebm.enrollment_id
     WHERE ebm.enrollment_id IN (SELECT id FROM enrollments)
       AND ebm.primary_paid = false
       AND ebm.due_date <= v_today
+      AND e.status = 'ACTIVE'
   ),
   overdue AS (
     SELECT COUNT(*)::int AS overdue_count
     FROM enrollment_billing_months ebm
+    JOIN enrollments e ON e.id = ebm.enrollment_id
     WHERE ebm.enrollment_id IN (SELECT id FROM enrollments)
       AND ebm.primary_paid = false
       AND ebm.due_date < v_today
+      AND e.status = 'ACTIVE'
   )
   SELECT jsonb_build_object(
     'metrics', jsonb_build_object(
@@ -84,12 +90,7 @@ BEGIN
         JOIN enrollments e ON e.id = t.enrollment_id
         WHERE e.karat = 'SILVER'
       ), 0),
-      'duesOutstanding', COALESCE((
-        SELECT SUM(COALESCE(e.commitment_amount, e.installment_amount, 0))
-        FROM enrollments e
-        WHERE e.id IN (SELECT enrollment_id FROM dues)
-          AND e.status = 'ACTIVE'
-      ), 0),
+      'duesOutstanding', COALESCE((SELECT SUM(amount_due) FROM dues), 0),
       'overdueCount', COALESCE((SELECT overdue_count FROM overdue), 0),
       'activeEnrollments', COALESCE((SELECT COUNT(*) FROM enrollments e WHERE e.status = 'ACTIVE'), 0),
       'currentRates', jsonb_build_object(

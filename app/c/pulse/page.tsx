@@ -188,7 +188,7 @@ export default function CustomerPulsePage() {
       // Fetch customer's enrollments
       let enrollmentsQuery = supabase
         .from('enrollments')
-        .select('id, plan_id, karat, status, scheme_templates(name, installment_amount, duration_months)');
+        .select('id, plan_id, karat, status, commitment_amount, scheme_templates(name, monthly_amount, installment_amount, duration_months)');
 
       if (customerId && authUserId && customerId !== authUserId) {
         enrollmentsQuery = enrollmentsQuery.in('customer_id', [customerId, authUserId]);
@@ -332,7 +332,11 @@ export default function CustomerPulsePage() {
       const unpaidEnrollmentIds = new Set((duesResult.data || []).map((d: any) => d.enrollment_id));
       (enrollments || []).forEach((e: any) => {
         if (unpaidEnrollmentIds.has(e.id) && e.status === 'ACTIVE') {
-          duesOutstanding += safeNumber(e.scheme_templates?.monthly_amount ?? e.scheme_templates?.installment_amount);
+          const amountDue =
+            (typeof e.commitment_amount === 'number' && e.commitment_amount > 0
+              ? e.commitment_amount
+              : e.scheme_templates?.monthly_amount ?? e.scheme_templates?.installment_amount) ?? 0;
+          duesOutstanding += safeNumber(amountDue);
         }
       });
 

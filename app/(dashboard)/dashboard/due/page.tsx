@@ -34,7 +34,7 @@ type OverdueEnrollment = {
 };
 
 export default function DuePage() {
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user } = useAuth();
   const [overdues, setOverdues] = useState<OverdueEnrollment[]>([]);
   const [filtered, setFiltered] = useState<OverdueEnrollment[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -50,14 +50,13 @@ export default function DuePage() {
     'Dear Customer, This is a gentle reminder as your payments are now due. Kindly make the payment to enjoy the benefits from your enrolled Schemes. Contact us if you need any assistance';
 
   useEffect(() => {
-    if (authLoading) return;
     if (!user) {
       router.push('/login');
       return;
     }
     void loadOverdues();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, router, authLoading]);
+  }, [user, router]);
 
   useEffect(() => {
     applyFilters();
@@ -66,12 +65,6 @@ export default function DuePage() {
 
   async function loadOverdues() {
     if (!user) return;
-    const retailerId = profile?.retailer_id;
-    if (!retailerId) {
-      setOverdues([]);
-      setLoading(false);
-      return;
-    }
 
     setLoading(true);
 
@@ -83,7 +76,6 @@ export default function DuePage() {
       const { data: billingData, error: billingError } = await supabase
         .from('enrollment_billing_months')
         .select('enrollment_id, billing_month, due_date, status, retailer_id')
-        .eq('retailer_id', retailerId)
         .eq('primary_paid', false)
         .lt('due_date', today)
         .order('due_date', { ascending: true });
@@ -106,10 +98,9 @@ export default function DuePage() {
           plan_id,
           commitment_amount,
           customers(id, full_name, phone),
-          scheme_templates(name)
+          scheme_templates(name, monthly_amount, installment_amount)
         `)
-        .in('id', enrollmentIds)
-        .eq('retailer_id', retailerId);
+        .in('id', enrollmentIds);
 
       if (enrollError) throw enrollError;
 
@@ -122,7 +113,10 @@ export default function DuePage() {
             customer_phone: e.customers?.phone || '',
             customer_id: e.customer_id,
             plan_name: e.scheme_templates?.name || 'Unknown Plan',
-            monthly_amount: e.commitment_amount || 0,
+            monthly_amount:
+              typeof e.commitment_amount === 'number' && e.commitment_amount > 0
+                ? e.commitment_amount
+                : e.scheme_templates?.monthly_amount ?? e.scheme_templates?.installment_amount ?? 0,
           },
         ])
       );
