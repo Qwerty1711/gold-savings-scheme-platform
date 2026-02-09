@@ -98,9 +98,11 @@ export default function PulseDashboard() {
   const [updateRateDialog, setUpdateRateDialog] = useState(false);
   const [newRate, setNewRate] = useState('');
   const [selectedKarat, setSelectedKarat] = useState<'18K' | '22K' | '24K' | 'SILVER'>('22K');
-  const [timeFilter, setTimeFilter] = useState<'DAY' | 'WEEK' | 'MONTH' | 'YEAR' | 'RANGE'>('MONTH');
+  const [timeFilter, setTimeFilter] = useState<'DAY' | 'WEEK' | 'MONTH' | 'YEAR' | 'RANGE'>('MONTH'); // Changed from 'DAY' to 'MONTH' to show more data by default
   const [customStart, setCustomStart] = useState<string>('');
   const [customEnd, setCustomEnd] = useState<string>('');
+  
+  // Transactions moved to Payments page
   
   const periodLabel = useMemo(() => {
     switch (timeFilter) {
@@ -113,13 +115,14 @@ export default function PulseDashboard() {
   }, [timeFilter]);
 
   const todayRange = useMemo(() => {
+    // Use UTC day boundaries to avoid "today" drifting due to server timezone comparisons
     const now = new Date();
     const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
     const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0, 0));
     return {
       startISO: start.toISOString(),
       endISO: end.toISOString(),
-      todayDateISO: start.toISOString().split('T')[0],
+      todayDateISO: start.toISOString().split('T')[0], // YYYY-MM-DD (UTC)
     };
   }, []);
 
@@ -143,144 +146,419 @@ export default function PulseDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [analyticsFilter, analyticsStart, analyticsEnd, metalTypeFilter]);
 
-  // ============================================================
-  // ✅ OPTIMIZED DASHBOARD LOAD - SINGLE RPC CALL
-  // ============================================================
-  // This replaces 20+ database queries with 1 optimized query
-  // Load time: 20 seconds → <2 seconds
-  // ============================================================
   async function loadDashboard() {
     if (!profile?.retailer_id) return;
 
     setLoading(true);
 
     try {
-      const { startDate, endDate } = calculateDateRange(timeFilter);
-      
-      // ✅ Start performance timer
-      const startTime = performance.now();
-      
-      // ✅ SINGLE RPC CALL - replaces all the queries below
-      const { data, error } = await supabase.rpc('get_dashboard_metrics', {
-        p_retailer_id: profile.retailer_id,
-        p_start_date: startDate.toISOString(),
-        p_end_date: endDate.toISOString(),
-      });
-      
-      // ✅ Log performance
-      const duration = performance.now() - startTime;
-      console.log(`✅ Dashboard loaded in ${duration.toFixed(0)}ms (was ~20,000ms before)`);
-      
-      if (error) {
-        console.error('Dashboard metrics error:', error);
-        toast.error('Failed to load dashboard data');
-        setLoading(false);
-        return;
+      const retailerId = profile.retailer_id;
+      let startISO: string;
+      let endISO: string;
+      let todayDateISO: string;
+
+      const now = new Date();
+      const startOfDayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+      const endOfDayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0, 0));
+
+      const toISO = (d: Date) => d.toISOString();
+      const startOfWeekUTC = (d: Date) => {
+        const day = d.getUTCDay();
+        const diff = (day + 6) % 7; // Monday start
+        const s = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - diff, 0, 0, 0, 0));
+        const e = new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate() + 7, 0, 0, 0, 0));
+        return { s, e };
+      };
+      const startOfMonthUTC = (d: Date) => {
+        const s = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1, 0, 0, 0, 0));
+        const e = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1, 0, 0, 0, 0));
+        return { s, e };
+      };
+      const startOfYearUTC = (d: Date) => {
+        const s = new Date(Date.UTC(d.getUTCFullYear(), 0, 1, 0, 0, 0, 0));
+        const e = new Date(Date.UTC(d.getUTCFullYear() + 1, 0, 1, 0, 0, 0, 0));
+        return { s, e };
+      };
+
+      if (timeFilter === 'DAY') {
+        startISO = toISO(startOfDayUTC);
+        endISO = toISO(endOfDayUTC);
+      } else if (timeFilter === 'WEEK') {
+        const { s, e } = startOfWeekUTC(now);
+        startISO = toISO(s); endISO = toISO(e);
+      } else if (timeFilter === 'MONTH') {
+        const { s, e } = startOfMonthUTC(now);
+        startISO = toISO(s); endISO = toISO(e);
+      } else if (timeFilter === 'YEAR') {
+        const { s, e } = startOfYearUTC(now);
+        startISO = toISO(s); endISO = toISO(e);
+      } else {
+        const s = customStart ? new Date(customStart) : startOfDayUTC;
+        const e = customEnd ? new Date(customEnd) : endOfDayUTC;
+        startISO = toISO(s);
+        endISO = toISO(e);
       }
-      
-      // ✅ Map response to existing metrics state (no UI changes needed)
-      setMetrics({
-        // Collections
-        periodCollections: safeNumber(data.period_collections),
-        collections18K: safeNumber(data.collections_18k),
-        collections22K: safeNumber(data.collections_22k),
-        collections24K: safeNumber(data.collections_24k),
-        collectionsSilver: safeNumber(data.collections_silver),
-        
-        // Gold allocated
-        goldAllocatedPeriod: safeNumber(data.gold_18k_allocated) + 
-                            safeNumber(data.gold_22k_allocated) + 
-                            safeNumber(data.gold_24k_allocated),
-        gold18KAllocated: safeNumber(data.gold_18k_allocated),
-        gold22KAllocated: safeNumber(data.gold_22k_allocated),
-        gold24KAllocated: safeNumber(data.gold_24k_allocated),
-        silverAllocated: safeNumber(data.silver_allocated),
-        
-        // Dues & overdue
-        duesOutstanding: safeNumber(data.dues_outstanding),
-        overdueCount: safeNumber(data.overdue_count),
-        
-        // Enrollments
-        totalEnrollmentsPeriod: safeNumber(data.total_enrollments_period),
-        activeEnrollmentsPeriod: safeNumber(data.active_enrollments_period),
-        
-        // Customers
-        totalCustomersPeriod: safeNumber(data.total_customers_period),
-        activeCustomersPeriod: safeNumber(data.active_customers_period),
-        
-        // Redemptions (these weren't in the RPC function, set to 0 for now)
-        readyToRedeemPeriod: 0,
-        completedRedemptionsPeriod: 0,
-        
-        // Dues breakdown (not in RPC yet, keeping 0 for now)
-        dues18K: 0,
-        dues22K: 0,
-        dues24K: 0,
-        duesSilver: 0,
-        
-        // Current rates
-        currentRates: {
-          k18: data.current_rates?.['18K'] ? {
-            rate: safeNumber(data.current_rates['18K'].rate),
-            validFrom: data.current_rates['18K'].valid_from || new Date().toISOString(),
-          } : null,
-          k22: data.current_rates?.['22K'] ? {
-            rate: safeNumber(data.current_rates['22K'].rate),
-            validFrom: data.current_rates['22K'].valid_from || new Date().toISOString(),
-          } : null,
-          k24: data.current_rates?.['24K'] ? {
-            rate: safeNumber(data.current_rates['24K'].rate),
-            validFrom: data.current_rates['24K'].valid_from || new Date().toISOString(),
-          } : null,
-          silver: data.current_rates?.SILVER ? {
-            rate: safeNumber(data.current_rates.SILVER.rate),
-            validFrom: data.current_rates.SILVER.valid_from || new Date().toISOString(),
-          } : null,
-        },
+
+      todayDateISO = startOfDayUTC.toISOString().split('T')[0];
+      const startDateISO = startISO.split('T')[0];
+      const endDateISO = endISO.split('T')[0];
+
+      const [
+        rate18Result,
+        rate22Result,
+        rate24Result,
+        rateSilverResult,
+        txnsResult,
+        duesBillingResult,
+        totalEnrollmentsResult,
+        activeEnrollmentsResult,
+        customersPeriodResult,
+        completedRedemptionsResult,
+      ] = await Promise.all([
+        supabase
+          .from('gold_rates')
+          .select('rate_per_gram, karat, effective_from')
+          .eq('retailer_id', retailerId)
+          .eq('karat', '18K')
+          .order('effective_from', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('gold_rates')
+          .select('rate_per_gram, karat, effective_from')
+          .eq('retailer_id', retailerId)
+          .eq('karat', '22K')
+          .order('effective_from', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('gold_rates')
+          .select('rate_per_gram, karat, effective_from')
+          .eq('retailer_id', retailerId)
+          .eq('karat', '24K')
+          .order('effective_from', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('gold_rates')
+          .select('rate_per_gram, karat, effective_from')
+          .eq('retailer_id', retailerId)
+          .eq('karat', 'SILVER')
+          .order('effective_from', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('transactions')
+          .select('amount_paid, grams_allocated_snapshot, paid_at, enrollment_id, txn_type')
+          .eq('retailer_id', retailerId)
+          .eq('payment_status', 'SUCCESS')
+          .in('txn_type', ['PRIMARY_INSTALLMENT', 'TOP_UP'])
+          .gte('paid_at', startISO)
+          .lt('paid_at', endISO)
+          .limit(1000), // Lower limit for faster dashboard
+        supabase
+          .from('enrollment_billing_months')
+          .select('enrollment_id')
+          .eq('retailer_id', retailerId)
+          .gte('due_date', startDateISO)
+          .lt('due_date', endDateISO)
+          .lt('due_date', todayDateISO)
+          .eq('primary_paid', false)
+          .limit(5000),
+        supabase
+          .from('enrollments')
+          .select('id', { count: 'exact', head: true })
+          .eq('retailer_id', retailerId)
+          .gte('created_at', startISO)
+          .lt('created_at', endISO)
+          .limit(500),
+        supabase
+          .from('enrollments')
+          .select('id', { count: 'exact', head: true })
+          .eq('retailer_id', retailerId)
+          .or('status.eq.ACTIVE,status.is.null')
+          .gte('created_at', startISO)
+          .lt('created_at', endISO)
+          .limit(500),
+        supabase
+          .from('customers')
+          .select('id')
+          .eq('retailer_id', retailerId)
+          .gte('created_at', startISO)
+          .lt('created_at', endISO)
+          .limit(500),
+        supabase
+          .from('redemptions')
+          .select('id', { count: 'exact', head: true })
+          .eq('retailer_id', retailerId)
+          .eq('redemption_status', 'COMPLETED')
+          .gte('redemption_date', startISO)
+          .lt('redemption_date', endISO),
+      ]);
+
+      // Log any errors from the parallel queries
+      if (rate18Result.error) console.error('Gold rate 18K error:', rate18Result.error);
+      if (rate22Result.error) console.error('Gold rate 22K error:', rate22Result.error);
+      if (rate24Result.error) console.error('Gold rate 24K error:', rate24Result.error);
+      if (rateSilverResult.error) console.error('Silver rate error:', rateSilverResult.error);
+      if (txnsResult.error) console.error('Transactions error:', txnsResult.error);
+      if (duesBillingResult.error) console.error('Dues error:', duesBillingResult.error);
+      if (totalEnrollmentsResult.error) console.error('Enrollments count error:', totalEnrollmentsResult.error);
+      if (activeEnrollmentsResult.error) console.error('Active enrollments count error:', activeEnrollmentsResult.error);
+      if (customersPeriodResult.error) console.error('Customers period error:', customersPeriodResult.error);
+      if (completedRedemptionsResult.error) console.error('Completed redemptions error:', completedRedemptionsResult.error);
+
+      const currentRates = {
+        k18: rate18Result.data
+          ? {
+              rate: safeNumber(rate18Result.data.rate_per_gram),
+              validFrom: (rate18Result.data as any).effective_from ?? new Date().toISOString(),
+            }
+          : null,
+        k22: rate22Result.data
+          ? {
+              rate: safeNumber(rate22Result.data.rate_per_gram),
+              validFrom: (rate22Result.data as any).effective_from ?? new Date().toISOString(),
+            }
+          : null,
+        k24: rate24Result.data
+          ? {
+              rate: safeNumber(rate24Result.data.rate_per_gram),
+              validFrom: (rate24Result.data as any).effective_from ?? new Date().toISOString(),
+            }
+          : null,
+        silver: rateSilverResult.data
+          ? {
+              rate: safeNumber(rateSilverResult.data.rate_per_gram),
+              validFrom: (rateSilverResult.data as any).effective_from ?? new Date().toISOString(),
+            }
+          : null,
+      };
+
+      const periodCustomers = customersPeriodResult.data || [];
+      const totalCustomersPeriod = periodCustomers.length;
+      let activeCustomersPeriod = 0;
+
+      if (periodCustomers.length > 0) {
+        const customerIds = periodCustomers.map((c: any) => c.id);
+        const { data: activeCustomerEnrollments, error: activeCustomerEnrollmentsError } = await supabase
+          .from('enrollments')
+          .select('id, customer_id, status')
+          .eq('retailer_id', retailerId)
+          .in('customer_id', customerIds)
+          .or('status.eq.ACTIVE,status.is.null')
+          .limit(1000);
+
+        if (activeCustomerEnrollmentsError) {
+          console.error('Active customers error:', activeCustomerEnrollmentsError);
+        } else {
+          const activeCustomerIds = new Set((activeCustomerEnrollments || []).map((e: any) => e.customer_id));
+          activeCustomersPeriod = activeCustomerIds.size;
+        }
+      }
+
+      let readyToRedeemPeriod = 0;
+      try {
+        const { data: eligibleEnrollmentsData, error: eligibleEnrollmentsError } = await supabase
+          .from('enrollments')
+          .select('id, created_at, maturity_date, commitment_amount, scheme_templates(duration_months)')
+          .eq('retailer_id', retailerId)
+          .eq('status', 'ACTIVE');
+
+        if (eligibleEnrollmentsError) {
+          console.error('Eligible enrollments error:', eligibleEnrollmentsError);
+        } else if (eligibleEnrollmentsData && eligibleEnrollmentsData.length > 0) {
+          const enrollmentIds = eligibleEnrollmentsData.map((e: any) => e.id);
+          const { data: redemptionTxnData, error: redemptionTxnError } = await supabase
+            .from('transactions')
+            .select('enrollment_id, grams_allocated_snapshot, amount_paid, txn_type')
+            .eq('retailer_id', retailerId)
+            .in('enrollment_id', enrollmentIds)
+            .eq('payment_status', 'SUCCESS');
+
+          if (redemptionTxnError) {
+            console.error('Eligible enrollments transactions error:', redemptionTxnError);
+          } else {
+            const gramsMap = new Map<string, { grams: number; paid: number; primaryPaid: number }>();
+            (redemptionTxnData || []).forEach((t: any) => {
+              const current = gramsMap.get(t.enrollment_id) || { grams: 0, paid: 0, primaryPaid: 0 };
+              const paid = t.amount_paid || 0;
+              const isPrimary = t.txn_type === 'PRIMARY_INSTALLMENT';
+              gramsMap.set(t.enrollment_id, {
+                grams: current.grams + (t.grams_allocated_snapshot || 0),
+                paid: current.paid + paid,
+                primaryPaid: current.primaryPaid + (isPrimary ? paid : 0),
+              });
+            });
+
+            const periodStart = new Date(startISO);
+            const periodEnd = new Date(endISO);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            readyToRedeemPeriod = eligibleEnrollmentsData.filter((e: any) => {
+              const durationMonths = e.scheme_templates?.duration_months || 0;
+              const commitmentAmount = e.commitment_amount || 0;
+              const requiredDue = commitmentAmount * durationMonths;
+
+              if (!durationMonths || !commitmentAmount || !requiredDue) return false;
+
+              const maturityBase = e.maturity_date
+                ? new Date(e.maturity_date)
+                : e.created_at
+                  ? new Date(e.created_at)
+                  : null;
+
+              if (!maturityBase) return false;
+
+              if (!e.maturity_date && durationMonths) {
+                maturityBase.setMonth(maturityBase.getMonth() + durationMonths);
+              }
+
+              maturityBase.setHours(0, 0, 0, 0);
+              if (maturityBase > today) return false;
+
+              const totals = gramsMap.get(e.id) || { grams: 0, paid: 0, primaryPaid: 0 };
+              if (totals.grams <= 0) return false;
+              if (totals.primaryPaid < requiredDue) return false;
+
+              if (maturityBase < periodStart || maturityBase >= periodEnd) return false;
+
+              return true;
+            }).length;
+          }
+        }
+      } catch (error) {
+        console.error('Error computing ready-to-redeem count:', error);
+      }
+
+      const completedRedemptionsPeriod = completedRedemptionsResult.count || 0;
+
+      // Fetch all enrollments to get karat information
+      // Fetch ALL enrollments for the retailer (not just ACTIVE)
+      const enrollmentsKaratResult = await supabase
+        .from('enrollments')
+        .select('id, karat')
+        .eq('retailer_id', retailerId);
+
+      if (enrollmentsKaratResult.error) {
+        console.error('Error fetching enrollments karat data:', enrollmentsKaratResult.error);
+      }
+
+      // Create a map of enrollment_id -> karat
+      const enrollmentKaratMap = new Map<string, string>();
+      (enrollmentsKaratResult.data || []).forEach((e: any) => {
+        enrollmentKaratMap.set(e.id, e.karat);
       });
 
-      setLoading(false);
+      // Calculate collections and grams allocated broken down by metal type
+      let collections18K = 0, collections22K = 0, collections24K = 0, collectionsSilver = 0;
+      let gold18KAllocated = 0, gold22KAllocated = 0, gold24KAllocated = 0, silverAllocated = 0;
+      
+      (txnsResult.data || []).forEach((t: any) => {
+        // Only count PRIMARY_INSTALLMENT and TOP_UP (already filtered in query)
+        const karat = enrollmentKaratMap.get(t.enrollment_id);
+        const amt = safeNumber(t.amount_paid);
+        const grams = safeNumber(t.grams_allocated_snapshot);
+        if (!karat) {
+          // Debug: log missing enrollment_id mapping
+          console.warn('Transaction with enrollment_id not found in enrollments:', t.enrollment_id, t);
+          return;
+        }
+        if (karat === '18K') {
+          collections18K += amt;
+          gold18KAllocated += grams;
+        } else if (karat === '22K') {
+          collections22K += amt;
+          gold22KAllocated += grams;
+        } else if (karat === '24K') {
+          collections24K += amt;
+          gold24KAllocated += grams;
+        } else if (karat === 'SILVER') {
+          collectionsSilver += amt;
+          silverAllocated += grams;
+        }
+      });
+
+      const periodCollections = collections18K + collections22K + collections24K + collectionsSilver;
+      const goldAllocatedPeriod = gold18KAllocated + gold22KAllocated + gold24KAllocated;
+
+      // Calculate dues outstanding broken down by metal type
+      // We need to fetch enrollment details for unpaid billing months
+      let dues18K = 0, dues22K = 0, dues24K = 0, duesSilver = 0;
+      
+      const dueRows = duesBillingResult.data || [];
+      const dueEnrollmentIds = Array.from(new Set(dueRows.map((d: any) => d.enrollment_id)));
+      const overdueCount = dueRows.length;
+
+      if (dueEnrollmentIds.length > 0) {
+        const { data: dueEnrollments } = await supabase
+          .from('enrollments')
+          .select('id, karat, commitment_amount, scheme_templates(installment_amount)')
+          .eq('retailer_id', retailerId)
+          .in('id', dueEnrollmentIds);
+
+        const enrollmentMap = new Map<string, { karat: string; monthly_amount: number }>();
+        (dueEnrollments || []).forEach((e: any) => {
+          const monthlyAmount =
+            (typeof e.commitment_amount === 'number' && e.commitment_amount > 0
+              ? e.commitment_amount
+              : e.scheme_templates?.installment_amount) ?? 0;
+          enrollmentMap.set(e.id, {
+            karat: e.karat || '22K',
+            monthly_amount: safeNumber(monthlyAmount),
+          });
+        });
+
+        dueRows.forEach((row: any) => {
+          const enrollment = enrollmentMap.get(row.enrollment_id);
+          if (!enrollment) return;
+          const amt = enrollment.monthly_amount;
+          if (enrollment.karat === '18K') {
+            dues18K += amt;
+          } else if (enrollment.karat === '22K') {
+            dues22K += amt;
+          } else if (enrollment.karat === '24K') {
+            dues24K += amt;
+          } else if (enrollment.karat === 'SILVER') {
+            duesSilver += amt;
+          }
+        });
+      }
+
+      const duesOutstanding = dues18K + dues22K + dues24K + duesSilver;
+
+      setMetrics({
+        periodCollections,
+        collections18K,
+        collections22K,
+        collections24K,
+        collectionsSilver,
+        goldAllocatedPeriod,
+        gold18KAllocated,
+        gold22KAllocated,
+        gold24KAllocated,
+        silverAllocated,
+        duesOutstanding,
+        dues18K,
+        dues22K,
+        dues24K,
+        duesSilver,
+        overdueCount,
+        totalEnrollmentsPeriod: totalEnrollmentsResult.count || 0,
+        activeEnrollmentsPeriod: activeEnrollmentsResult.count || 0,
+        totalCustomersPeriod,
+        activeCustomersPeriod,
+        readyToRedeemPeriod,
+        completedRedemptionsPeriod,
+        currentRates,
+      });
     } catch (error) {
       console.error('Error loading dashboard:', error);
       toast.error('Failed to load dashboard data');
+    } finally {
       setLoading(false);
     }
-  }
-
-  // ✅ Helper function to calculate date ranges
-  function calculateDateRange(filter: 'DAY' | 'WEEK' | 'MONTH' | 'YEAR' | 'RANGE') {
-    const now = new Date();
-    let startDate: Date;
-    let endDate: Date = new Date();
-    
-    switch (filter) {
-      case 'DAY':
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        break;
-      case 'WEEK':
-        const day = now.getDay();
-        const diff = (day + 6) % 7; // Monday start
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diff);
-        break;
-      case 'MONTH':
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        break;
-      case 'YEAR':
-        startDate = new Date(now.getFullYear(), 0, 1);
-        break;
-      case 'RANGE':
-        if (customStart && customEnd) {
-          startDate = new Date(customStart);
-          endDate = new Date(customEnd);
-        } else {
-          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        }
-        break;
-      default:
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-    }
-    
-    return { startDate, endDate };
   }
 
   async function loadChartTrends() {
@@ -460,6 +738,7 @@ export default function PulseDashboard() {
         }
       });
 
+      // Calculate cumulative active customers
       const customerData = Array.from(customerMap).map(([date, data]) => ({
         date,
         newEnrollments: data.newEnrollments,
@@ -487,6 +766,9 @@ export default function PulseDashboard() {
         const payment = paymentMap.get(dueDate)!;
         payment.total += 1;
 
+        // Count as on-time if primary_paid is true
+        // Note: We don't have exact paid_at, so we can't check if payment was before due date
+        // This is a simplified version - primary_paid means it was paid
         if (billing.primary_paid) {
           payment.onTime += 1;
         }
@@ -499,7 +781,7 @@ export default function PulseDashboard() {
         completionRate: data.total > 0 ? Math.round((data.onTime / data.total) * 100) : 0,
       })).sort((a, b) => a.date.localeCompare(b.date)));
 
-      // 4. Scheme Health Score
+      // 4. Scheme Health Score (simplified - use billing status as proxy)
       const schemeHealthMap = new Map<string, { onTrack: number; due: number; missed: number; readyToRedeem: number }>();
       const today = now.toISOString().split('T')[0];
 
@@ -543,6 +825,8 @@ export default function PulseDashboard() {
         }
 
         const dayData = staffPerfMap.get(date)!;
+        // Note: transactions don't have staff_id, so this is a simplified version
+        // You may need to add staff_id to transactions table or use another method
         dayData.total = (dayData.total || 0) + safeNumber(txn.amount_paid);
       });
 
@@ -553,6 +837,8 @@ export default function PulseDashboard() {
       toast.error('Failed to load analytics data');
     }
   }
+
+  // loadTransactions moved to Collections page
 
   async function handleUpdateRate() {
     if (!profile?.retailer_id) {
@@ -836,8 +1122,20 @@ export default function PulseDashboard() {
             <p className="text-xs text-muted-foreground mt-1">{periodLabel}</p>
             <div className="grid grid-cols-2 gap-2 pt-3 mt-2 border-t border-gray-200 dark:border-gray-700">
               <div className="text-xs">
-                <span className="text-muted-foreground">Overdue Count</span>
-                <div className="font-semibold text-red-600">{metrics?.overdueCount ?? 0}</div>
+                <Badge variant="outline" className="bg-amber-50 dark:bg-amber-900/20 border-amber-300 mb-1 text-[10px]">18K</Badge>
+                <div className="font-semibold">₹{(metrics?.dues18K ?? 0).toLocaleString()}</div>
+              </div>
+              <div className="text-xs">
+                <Badge className="bg-gold-100 dark:bg-gold-900/30 text-gold-800 dark:text-gold-200 border-gold-400 mb-1 text-[10px]">22K</Badge>
+                <div className="font-semibold">₹{(metrics?.dues22K ?? 0).toLocaleString()}</div>
+              </div>
+              <div className="text-xs">
+                <Badge variant="outline" className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 mb-1 text-[10px]">24K</Badge>
+                <div className="font-semibold">₹{(metrics?.dues24K ?? 0).toLocaleString()}</div>
+              </div>
+              <div className="text-xs">
+                <Badge variant="outline" className="bg-slate-50 dark:bg-slate-900/20 border-slate-300 mb-1 text-[10px]">Silver</Badge>
+                <div className="font-semibold">₹{(metrics?.duesSilver ?? 0).toLocaleString()}</div>
               </div>
             </div>
           </CardContent>
@@ -940,8 +1238,9 @@ export default function PulseDashboard() {
         </Card>
       </div>
 
-      {/* Advanced Analytics Section - keeping all the charts from original code */}
+      {/* Advanced Analytics Section */}
       <div className="space-y-6">
+        {/* Analytics Filter Bar */}
         <Card className="jewel-card">
           <CardContent className="pt-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -1216,6 +1515,8 @@ export default function PulseDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Transactions section moved to Collections page */}
 
       <Dialog open={updateRateDialog} onOpenChange={setUpdateRateDialog}>
         <DialogContent className="sm:max-w-md">
