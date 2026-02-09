@@ -30,10 +30,10 @@ BEGIN
     SELECT * FROM customers WHERE retailer_id = p_retailer_id
   ),
   rates AS (
-    SELECT metal_type, rate_per_gram, valid_from
+    SELECT karat, rate_per_gram, effective_from
     FROM gold_rates
     WHERE retailer_id = p_retailer_id
-      AND is_active = true
+      -- Optionally filter for latest rates per karat
   ),
   -- Dues/Overdue logic
   billing AS (
@@ -59,7 +59,7 @@ BEGIN
     'silver_allocated', COALESCE((SELECT SUM(grams_allocated_snapshot) FROM txns WHERE karat = 'SILVER'), 0),
 
     -- Dues & overdue
-    'dues_outstanding', COALESCE((SELECT SUM(CASE WHEN NOT primary_paid THEN eb.monthly_amount ELSE 0 END) FROM enrollment_billing_months eb JOIN enrollments e ON eb.enrollment_id = e.id WHERE e.retailer_id = p_retailer_id AND eb.due_date >= p_start_date::date AND eb.due_date < p_end_date::date), 0),
+    'dues_outstanding', COALESCE((SELECT SUM(CASE WHEN NOT primary_paid THEN e.commitment_amount ELSE 0 END) FROM enrollment_billing_months eb JOIN enrollments e ON eb.enrollment_id = e.id WHERE e.retailer_id = p_retailer_id AND eb.due_date >= p_start_date::date AND eb.due_date < p_end_date::date), 0),
     'overdue_count', COALESCE((SELECT COUNT(*) FROM enrollment_billing_months eb JOIN enrollments e ON eb.enrollment_id = e.id WHERE e.retailer_id = p_retailer_id AND eb.due_date < CURRENT_DATE AND NOT primary_paid), 0),
 
     -- Enrollments
@@ -72,7 +72,7 @@ BEGIN
 
     -- Current rates
     'current_rates', (
-      SELECT jsonb_object_agg(metal_type, jsonb_build_object('rate', rate_per_gram, 'valid_from', valid_from))
+      SELECT jsonb_object_agg(karat, jsonb_build_object('rate', rate_per_gram, 'valid_from', effective_from))
       FROM rates
     )
   )
