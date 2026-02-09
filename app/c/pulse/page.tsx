@@ -12,6 +12,19 @@ import {
   Wallet,
   Gift,
 } from 'lucide-react';
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
 import { supabaseCustomer as supabase } from '@/lib/supabase/client';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 import { useCustomerAuth } from '@/lib/contexts/customer-auth-context';
@@ -46,9 +59,80 @@ type Transaction = {
   scheme_name?: string;
 };
 
+type PortfolioPoint = {
+  date: string;
+  contributions: number;
+  value: number;
+};
+
+type AvgPricePoint = {
+  date: string;
+  avgBuyPrice: number;
+  marketPrice: number;
+  metalLabel: 'GOLD' | 'SILVER';
+};
+
+type EfficiencyPoint = {
+  month: string;
+  efficiency: number;
+};
+
+type CustomerPulseCache = {
+  metrics: CustomerMetrics | null;
+  transactions: Transaction[];
+  portfolioSeries: PortfolioPoint[];
+  avgPriceSeries: AvgPricePoint[];
+  efficiencySeries: EfficiencyPoint[];
+  growthRate: number | null;
+  portfolioValue: number;
+};
+
 function safeNumber(v: unknown): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
+}
+
+function toDateKey(value: string | Date): string {
+  return new Date(value).toISOString().split('T')[0];
+}
+
+function formatCurrency(value: number): string {
+  return `₹${Math.round(value).toLocaleString('en-IN')}`;
+}
+
+function computeXirr(cashflows: { amount: number; date: string }[]): number | null {
+  if (cashflows.length < 2) return null;
+  const hasPositive = cashflows.some((flow) => flow.amount > 0);
+  const hasNegative = cashflows.some((flow) => flow.amount < 0);
+  if (!hasPositive || !hasNegative) return null;
+
+  const baseDate = new Date(cashflows[0].date);
+  const yearFractions = cashflows.map((flow) => {
+    const days = (new Date(flow.date).getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24);
+    return days / 365;
+  });
+
+  let rate = 0.1;
+  for (let i = 0; i < 50; i += 1) {
+    let f = 0;
+    let df = 0;
+
+    for (let j = 0; j < cashflows.length; j += 1) {
+      const t = yearFractions[j];
+      const denom = Math.pow(1 + rate, t);
+      f += cashflows[j].amount / denom;
+      df += -t * cashflows[j].amount / (denom * (1 + rate));
+    }
+
+    if (Math.abs(f) < 1e-6) return rate;
+    if (Math.abs(df) < 1e-10) return null;
+
+    const nextRate = rate - f / df;
+    if (nextRate <= -0.9999 || !Number.isFinite(nextRate)) return null;
+    rate = nextRate;
+  }
+
+  return null;
 }
 
 export default function CustomerPulsePage() {
@@ -56,6 +140,11 @@ export default function CustomerPulsePage() {
   
   const [metrics, setMetrics] = useState<CustomerMetrics | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [portfolioSeries, setPortfolioSeries] = useState<PortfolioPoint[]>([]);
+  const [avgPriceSeries, setAvgPriceSeries] = useState<AvgPricePoint[]>([]);
+  const [efficiencySeries, setEfficiencySeries] = useState<EfficiencyPoint[]>([]);
+  const [growthRate, setGrowthRate] = useState<number | null>(null);
+  const [portfolioValue, setPortfolioValue] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [timeFilter, setTimeFilter] = useState<'DAY' | 'WEEK' | 'MONTH' | 'YEAR' | 'RANGE'>('MONTH');
   const [customStart, setCustomStart] = useState<string>('');
@@ -74,10 +163,15 @@ export default function CustomerPulsePage() {
   useEffect(() => {
     if (!customer?.id) return;
     const cacheKey = `customer:pulse:${customer.id}:${timeFilter}:${customStart || 'na'}:${customEnd || 'na'}`;
-    const cached = readCustomerCache<{ metrics: CustomerMetrics | null; transactions: Transaction[] }>(cacheKey);
+    const cached = readCustomerCache<CustomerPulseCache>(cacheKey);
     if (cached) {
       setMetrics(cached.metrics);
       setTransactions(cached.transactions);
+      setPortfolioSeries(cached.portfolioSeries || []);
+      setAvgPriceSeries(cached.avgPriceSeries || []);
+      setEfficiencySeries(cached.efficiencySeries || []);
+      setGrowthRate(cached.growthRate ?? null);
+      setPortfolioValue(cached.portfolioValue || 0);
       setLoading(false);
       void loadDashboard(true);
       return;
@@ -174,14 +268,6 @@ export default function CustomerPulsePage() {
 
           setMetrics(nextMetrics);
           setTransactions(txnsData as Transaction[]);
-
-          if (customer?.id) {
-            const cacheKey = `customer:pulse:${customer.id}:${timeFilter}:${customStart || 'na'}:${customEnd || 'na'}`;
-            writeCustomerCache(cacheKey, { metrics: nextMetrics, transactions: txnsData });
-          }
-
-          setLoading(false);
-          return;
         }
       }
 
@@ -207,9 +293,11 @@ export default function CustomerPulsePage() {
       const enrollmentIds = (enrollments || []).map((e: any) => e.id);
       const enrollmentKaratMap = new Map<string, string>();
       const enrollmentSchemeMap = new Map<string, string>();
+      const activeEnrollmentIds = new Set<string>();
       (enrollments || []).forEach((e: any) => {
         enrollmentKaratMap.set(e.id, e.karat);
         enrollmentSchemeMap.set(e.id, e.scheme_templates?.name || 'Unknown');
+        if (e.status === 'ACTIVE') activeEnrollmentIds.add(e.id);
       });
 
       const txnsPromise = enrollmentIds.length > 0
@@ -235,7 +323,7 @@ export default function CustomerPulsePage() {
         ? (() => {
             let allTimeQuery = supabase
               .from('transactions')
-              .select('amount_paid, grams_allocated_snapshot, enrollment_id')
+              .select('amount_paid, grams_allocated_snapshot, enrollment_id, paid_at')
               .eq('payment_status', 'SUCCESS')
               .in('txn_type', ['PRIMARY_INSTALLMENT', 'TOP_UP'])
               .in('enrollment_id', enrollmentIds)
@@ -246,21 +334,6 @@ export default function CustomerPulsePage() {
             return allTimeQuery;
           })()
         : Promise.resolve({ data: [], error: null });
-
-      // Calculate totals
-      let totalCollections = 0;
-      let goldAllocated = 0;
-      let silverAllocated = 0;
-
-      (allTimeTxns.data || []).forEach((t: any) => {
-        const karat = enrollmentKaratMap.get(t.enrollment_id);
-        totalCollections += safeNumber(t.amount_paid);
-        if (karat === 'SILVER') {
-          silverAllocated += safeNumber(t.grams_allocated_snapshot);
-        } else {
-          goldAllocated += safeNumber(t.grams_allocated_snapshot);
-        }
-      });
 
       const duesPromise = enrollmentIds.length > 0
         ? (() => {
@@ -307,7 +380,21 @@ export default function CustomerPulsePage() {
         return query.maybeSingle();
       };
 
-      const [txnsResult, allTimeTxns, duesResult, overdueResult, rate18Result, rate22Result, rate24Result, rateSilverResult] = await Promise.all([
+      const rateHistoryPromise = enrollmentIds.length > 0
+        ? (() => {
+            let rateQuery = supabase
+              .from('gold_rates')
+              .select('karat, rate_per_gram, effective_from')
+              .in('karat', ['18K', '22K', '24K', 'SILVER'])
+              .order('effective_from', { ascending: true });
+            if (retailerId) {
+              rateQuery = rateQuery.eq('retailer_id', retailerId);
+            }
+            return rateQuery;
+          })()
+        : Promise.resolve({ data: [], error: null });
+
+      const [txnsResult, allTimeTxns, duesResult, overdueResult, rate18Result, rate22Result, rate24Result, rateSilverResult, rateHistoryResult] = await Promise.all([
         txnsPromise,
         allTimePromise,
         duesPromise,
@@ -316,7 +403,23 @@ export default function CustomerPulsePage() {
         rateBaseQuery('22K'),
         rateBaseQuery('24K'),
         rateBaseQuery('SILVER'),
+        rateHistoryPromise,
       ]);
+      // Calculate totals
+      let totalCollections = 0;
+      let goldAllocated = 0;
+      let silverAllocated = 0;
+
+      (allTimeTxns.data || []).forEach((t: any) => {
+        const karat = enrollmentKaratMap.get(t.enrollment_id);
+        totalCollections += safeNumber(t.amount_paid);
+        if (karat === 'SILVER') {
+          silverAllocated += safeNumber(t.grams_allocated_snapshot);
+        } else {
+          goldAllocated += safeNumber(t.grams_allocated_snapshot);
+        }
+      });
+
 
       if (txnsResult.error) console.error('Transactions error:', txnsResult.error);
 
@@ -359,9 +462,197 @@ export default function CustomerPulsePage() {
       }));
       setTransactions(formattedTxns);
 
+      // Build portfolio series + growth using active schemes and daily rates
+      let nextPortfolioSeries: PortfolioPoint[] = [];
+      let nextAvgPriceSeries: AvgPricePoint[] = [];
+      let nextEfficiencySeries: EfficiencyPoint[] = [];
+      let nextPortfolioValue = 0;
+      let nextGrowthRate: number | null = null;
+
+      if (rateHistoryResult.error) {
+        console.error('Rate history error:', rateHistoryResult.error);
+      }
+
+      const activeTxns = (allTimeTxns.data || []).filter((t: any) => activeEnrollmentIds.has(t.enrollment_id));
+      if (activeTxns.length > 0 && (rateHistoryResult.data || []).length > 0) {
+        const contributionsByDate = new Map<string, number>();
+        const contributionsByDateMetal = new Map<string, { gold: number; silver: number }>();
+        const gramsByDate = new Map<string, Record<string, number>>();
+        let minDateKey = toDateKey(activeTxns[0].paid_at);
+
+        activeTxns.forEach((t: any) => {
+          const dateKey = toDateKey(t.paid_at);
+          if (dateKey < minDateKey) minDateKey = dateKey;
+          const amountPaid = safeNumber(t.amount_paid);
+          contributionsByDate.set(dateKey, (contributionsByDate.get(dateKey) || 0) + amountPaid);
+
+          const karat = enrollmentKaratMap.get(t.enrollment_id);
+          if (!karat) return;
+          const metalEntry = contributionsByDateMetal.get(dateKey) || { gold: 0, silver: 0 };
+          if (karat === 'SILVER') {
+            metalEntry.silver += amountPaid;
+          } else {
+            metalEntry.gold += amountPaid;
+          }
+          contributionsByDateMetal.set(dateKey, metalEntry);
+          const grams = safeNumber(t.grams_allocated_snapshot);
+          const dayGrams = gramsByDate.get(dateKey) || {};
+          dayGrams[karat] = (dayGrams[karat] || 0) + grams;
+          gramsByDate.set(dateKey, dayGrams);
+        });
+
+        const ratesByKarat = new Map<string, { date: string; rate: number }[]>();
+        (rateHistoryResult.data || []).forEach((row: any) => {
+          const key = row.karat;
+          const list = ratesByKarat.get(key) || [];
+          list.push({ date: toDateKey(row.effective_from), rate: safeNumber(row.rate_per_gram) });
+          ratesByKarat.set(key, list);
+        });
+
+        const rateOnDate = (karat: string, dateKey: string) => {
+          const list = ratesByKarat.get(karat) || [];
+          let rate = 0;
+          for (let i = 0; i < list.length; i += 1) {
+            if (list[i].date <= dateKey) {
+              rate = list[i].rate;
+            } else {
+              break;
+            }
+          }
+          return rate;
+        };
+
+        const todayKey = toDateKey(startOfDayUTC);
+        const startDate = new Date(`${minDateKey}T00:00:00Z`);
+        const endDate = new Date(`${todayKey}T00:00:00Z`);
+        const cumulativeGrams: Record<string, number> = { '18K': 0, '22K': 0, '24K': 0, 'SILVER': 0 };
+        const rateIndexes: Record<string, number> = { '18K': 0, '22K': 0, '24K': 0, 'SILVER': 0 };
+        const currentRatesByKarat: Record<string, number> = { '18K': 0, '22K': 0, '24K': 0, 'SILVER': 0 };
+        let cumulativeContributions = 0;
+        let cumulativeGoldInvested = 0;
+        let cumulativeSilverInvested = 0;
+
+        for (let d = new Date(startDate); d <= endDate; d.setUTCDate(d.getUTCDate() + 1)) {
+          const dateKey = toDateKey(d);
+          cumulativeContributions += contributionsByDate.get(dateKey) || 0;
+          const metalContribution = contributionsByDateMetal.get(dateKey);
+          if (metalContribution) {
+            cumulativeGoldInvested += metalContribution.gold;
+            cumulativeSilverInvested += metalContribution.silver;
+          }
+          const dayGrams = gramsByDate.get(dateKey);
+          if (dayGrams) {
+            Object.entries(dayGrams).forEach(([karat, grams]) => {
+              if (typeof cumulativeGrams[karat] === 'number') {
+                cumulativeGrams[karat] += grams;
+              }
+            });
+          }
+
+          ['18K', '22K', '24K', 'SILVER'].forEach((karat) => {
+            const list = ratesByKarat.get(karat) || [];
+            while (rateIndexes[karat] < list.length && list[rateIndexes[karat]].date <= dateKey) {
+              currentRatesByKarat[karat] = list[rateIndexes[karat]].rate;
+              rateIndexes[karat] += 1;
+            }
+          });
+
+          let portfolio = 0;
+          Object.entries(cumulativeGrams).forEach(([karat, grams]) => {
+            portfolio += grams * (currentRatesByKarat[karat] || 0);
+          });
+
+          const goldGrams = (cumulativeGrams['18K'] || 0) + (cumulativeGrams['22K'] || 0) + (cumulativeGrams['24K'] || 0);
+          const silverGrams = cumulativeGrams['SILVER'] || 0;
+          const dominantMetal: 'GOLD' | 'SILVER' = goldGrams >= silverGrams ? 'GOLD' : 'SILVER';
+          let avgBuyPrice = 0;
+          let marketPrice = 0;
+
+          if (dominantMetal === 'GOLD' && goldGrams > 0) {
+            avgBuyPrice = cumulativeGoldInvested / goldGrams;
+            const weightedGoldValue =
+              (cumulativeGrams['18K'] || 0) * (currentRatesByKarat['18K'] || 0) +
+              (cumulativeGrams['22K'] || 0) * (currentRatesByKarat['22K'] || 0) +
+              (cumulativeGrams['24K'] || 0) * (currentRatesByKarat['24K'] || 0);
+            marketPrice = weightedGoldValue / goldGrams;
+          }
+
+          if (dominantMetal === 'SILVER' && silverGrams > 0) {
+            avgBuyPrice = cumulativeSilverInvested / silverGrams;
+            marketPrice = currentRatesByKarat['SILVER'] || 0;
+          }
+
+          nextPortfolioSeries.push({
+            date: dateKey,
+            contributions: cumulativeContributions,
+            value: portfolio,
+          });
+
+          if (avgBuyPrice > 0 && marketPrice > 0) {
+            nextAvgPriceSeries.push({
+              date: dateKey,
+              avgBuyPrice,
+              marketPrice,
+              metalLabel: dominantMetal,
+            });
+          }
+        }
+
+        const efficiencyByMonth = new Map<string, { weightedSum: number; total: number }>();
+        activeTxns.forEach((t: any) => {
+          const dateKey = toDateKey(t.paid_at);
+          const monthKey = dateKey.slice(0, 7);
+          const karat = enrollmentKaratMap.get(t.enrollment_id);
+          if (!karat) return;
+          const priceAtDate = rateOnDate(karat, dateKey);
+          const currentPrice = currentRatesByKarat[karat] || 0;
+          if (priceAtDate <= 0 || currentPrice <= 0) return;
+
+          const efficiency = currentPrice / priceAtDate - 1;
+          const amountPaid = safeNumber(t.amount_paid);
+          const entry = efficiencyByMonth.get(monthKey) || { weightedSum: 0, total: 0 };
+          entry.weightedSum += efficiency * amountPaid;
+          entry.total += amountPaid;
+          efficiencyByMonth.set(monthKey, entry);
+        });
+
+        nextEfficiencySeries = Array.from(efficiencyByMonth.entries())
+          .map(([month, entry]) => ({
+            month,
+            efficiency: entry.total > 0 ? (entry.weightedSum / entry.total) * 100 : 0,
+          }))
+          .sort((a, b) => a.month.localeCompare(b.month));
+
+        nextPortfolioValue = nextPortfolioSeries[nextPortfolioSeries.length - 1]?.value || 0;
+
+        const cashflows = activeTxns.map((t: any) => ({
+          amount: -safeNumber(t.amount_paid),
+          date: t.paid_at,
+        }));
+        if (nextPortfolioValue > 0) {
+          cashflows.push({ amount: nextPortfolioValue, date: `${todayKey}T00:00:00Z` });
+        }
+        const xirr = computeXirr(cashflows);
+        nextGrowthRate = xirr !== null ? xirr * 100 : null;
+      }
+
+      setPortfolioSeries(nextPortfolioSeries);
+      setAvgPriceSeries(nextAvgPriceSeries);
+      setEfficiencySeries(nextEfficiencySeries);
+      setPortfolioValue(nextPortfolioValue);
+      setGrowthRate(nextGrowthRate);
+
       if (customer?.id) {
         const cacheKey = `customer:pulse:${customer.id}:${timeFilter}:${customStart || 'na'}:${customEnd || 'na'}`;
-        writeCustomerCache(cacheKey, { metrics: nextMetrics, transactions: formattedTxns });
+        writeCustomerCache(cacheKey, {
+          metrics: nextMetrics,
+          transactions: formattedTxns,
+          portfolioSeries: nextPortfolioSeries,
+          avgPriceSeries: nextAvgPriceSeries,
+          efficiencySeries: nextEfficiencySeries,
+          growthRate: nextGrowthRate,
+          portfolioValue: nextPortfolioValue,
+        });
       }
 
     } catch (error) {
@@ -460,7 +751,7 @@ export default function CustomerPulsePage() {
       </Card>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card className="glass-card">
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
@@ -534,7 +825,199 @@ export default function CustomerPulsePage() {
             </div>
           </CardContent>
         </Card>
+
+        <Card className="glass-card">
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-emerald-100 rounded-lg">
+                <TrendingUp className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Your Growth</p>
+                <p className="text-xl font-bold">
+                  {growthRate !== null ? `${growthRate.toFixed(2)}%` : '—'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Portfolio value {portfolioValue > 0 ? formatCurrency(portfolioValue) : '—'}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Portfolio Growth vs Contributions */}
+      <Card className="glass-card">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-emerald-600" />
+            Portfolio Growth vs Contributions
+          </CardTitle>
+          <CardDescription>
+            Cumulative contributions vs portfolio market value across active schemes
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {portfolioSeries.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Calendar className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p>Not enough data yet to render growth chart</p>
+            </div>
+          ) : (
+            <div className="h-[320px] w-full">
+              <ResponsiveContainer>
+                <LineChart data={portfolioSeries} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={(value) => new Date(value).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                    minTickGap={24}
+                  />
+                  <YAxis tickFormatter={(value) => formatCurrency(Number(value))} width={90} />
+                  <Tooltip
+                    formatter={(value) => formatCurrency(Number(value))}
+                    labelFormatter={(label) => new Date(label).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="contributions"
+                    name="Cumulative Contributions"
+                    stroke="#d97706"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="value"
+                    name="Portfolio Market Value"
+                    stroke="#16a34a"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Average Buy Price vs Market Price */}
+      <Card className="glass-card">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-gold-600" />
+            Avg Buy Price vs Market Price
+          </CardTitle>
+          <CardDescription>
+            Effective average buy price compared with daily market price
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {avgPriceSeries.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Calendar className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p>Not enough data yet to render price comparison</p>
+            </div>
+          ) : (
+            <div className="h-[320px] w-full">
+              <ResponsiveContainer>
+                <LineChart data={avgPriceSeries} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={(value) => new Date(value).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                    minTickGap={24}
+                  />
+                  <YAxis
+                    tickFormatter={(value) => formatCurrency(Number(value))}
+                    width={90}
+                  />
+                  <Tooltip
+                    formatter={(value, name, item) => {
+                      const label = name === 'avgBuyPrice' ? 'Avg Buy Price' : 'Market Price';
+                      const metal = (item?.payload as AvgPricePoint | undefined)?.metalLabel;
+                      const suffix = metal ? ` (${metal})` : '';
+                      return [formatCurrency(Number(value)), `${label}${suffix}`];
+                    }}
+                    labelFormatter={(label) => new Date(label).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  />
+                  <Legend formatter={(value) => (value === 'avgBuyPrice' ? 'Avg Buy Price' : 'Market Price')} />
+                  <Line
+                    type="monotone"
+                    dataKey="avgBuyPrice"
+                    name="avgBuyPrice"
+                    stroke="#f59e0b"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="marketPrice"
+                    name="marketPrice"
+                    stroke="#2563eb"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Contribution Efficiency Heatmap */}
+      <Card className="glass-card">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-rose-600" />
+            Contribution Efficiency
+          </CardTitle>
+          <CardDescription>
+            Monthly efficiency index based on current price vs contribution date price
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {efficiencySeries.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Calendar className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p>Not enough data yet to render efficiency view</p>
+            </div>
+          ) : (
+            <div className="h-[280px] w-full">
+              <ResponsiveContainer>
+                <BarChart data={efficiencySeries} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="month"
+                    tickFormatter={(value) => {
+                      const [year, month] = value.split('-');
+                      return new Date(Number(year), Number(month) - 1, 1).toLocaleDateString('en-IN', { month: 'short', year: '2-digit' });
+                    }}
+                    minTickGap={20}
+                  />
+                  <YAxis tickFormatter={(value) => `${Number(value).toFixed(0)}%`} width={60} />
+                  <Tooltip
+                    formatter={(value) => [`${Number(value).toFixed(2)}%`, 'Efficiency Index']}
+                    labelFormatter={(label) => {
+                      const [year, month] = label.split('-');
+                      return new Date(Number(year), Number(month) - 1, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+                    }}
+                  />
+                  <Bar dataKey="efficiency" name="Efficiency Index">
+                    {efficiencySeries.map((entry) => (
+                      <Cell
+                        key={entry.month}
+                        fill={entry.efficiency >= 0 ? '#16a34a' : '#dc2626'}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Recent Transactions */}
       <Card className="glass-card">
