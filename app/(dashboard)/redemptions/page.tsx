@@ -146,9 +146,9 @@ export default function RedemptionsPage() {
           gold_22k_grams,
           gold_24k_grams,
           silver_grams,
+          customers(full_name, phone),
           enrollments(
             karat,
-            customers(full_name, phone),
             scheme_templates(name)
           )
         `)
@@ -158,18 +158,17 @@ export default function RedemptionsPage() {
       if (error) throw error;
 
       const rawRows = data || [];
-      const processedByIds = Array.from(
-        new Set(rawRows.map((row: any) => row.processed_by).filter(Boolean))
+      const enrollmentIds = Array.from(
+        new Set(rawRows.map((row: any) => row.enrollment_id).filter(Boolean))
       ) as string[];
-      const processedByMap = new Map<string, string>();
+      const enrollmentMap = new Map<string, any>();
+      const planMap = new Map<string, string>();
+      const customerMap = new Map<string, { full_name: string; phone: string }>();
 
-      if (processedByIds.length > 0) {
-        const { data: processedByProfiles, error: processedByError } = await supabase
-          .from('user_profiles')
-          .select('id, full_name')
-          .in('id', processedByIds);
-
-        if (processedByError) {
+      if (enrollmentIds.length > 0) {
+        const { data: enrollmentsData, error: enrollmentsError } = await supabase
+          .from('enrollments')
+          .select('id, karat, customer_id, plan_id')
           console.error('Processed by lookup error:', processedByError);
         } else {
           (processedByProfiles || []).forEach((p: any) => {
@@ -180,8 +179,8 @@ export default function RedemptionsPage() {
 
       const rows = rawRows.map((row: any) => ({
         id: row.id,
-        customer_name: row.enrollments?.customers?.full_name || 'Unknown',
-        customer_phone: row.enrollments?.customers?.phone || '',
+        customer_name: row.customers?.full_name || 'Unknown',
+        customer_phone: row.customers?.phone || '',
         enrollment_karat: row.enrollments?.karat || '22K',
         scheme_name: row.enrollments?.scheme_templates?.name || 'Unknown Plan',
         gold_18k_grams: safeNumber(row.gold_18k_grams),
