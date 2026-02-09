@@ -166,75 +166,77 @@ export default function PulseDashboard() {
         p_start_date: startDate.toISOString(),
         p_end_date: endDate.toISOString(),
       });
-      
+
+      const metricsData = data?.get_dashboard_metrics || {};
+
       // ✅ Log performance
       const duration = performance.now() - startTime;
       console.log(`✅ Dashboard loaded in ${duration.toFixed(0)}ms (was ~20,000ms before)`);
-      
+
       if (error) {
         console.error('Dashboard metrics error:', error);
         toast.error('Failed to load dashboard data');
         setLoading(false);
         return;
       }
-      
+
       // ✅ Map response to existing metrics state (no UI changes needed)
       setMetrics({
         // Collections
-        periodCollections: safeNumber(data.period_collections),
-        collections18K: safeNumber(data.collections_18k),
-        collections22K: safeNumber(data.collections_22k),
-        collections24K: safeNumber(data.collections_24k),
-        collectionsSilver: safeNumber(data.collections_silver),
-        
+        periodCollections: safeNumber(metricsData.period_collections),
+        collections18K: safeNumber(metricsData.collections_18k),
+        collections22K: safeNumber(metricsData.collections_22k),
+        collections24K: safeNumber(metricsData.collections_24k),
+        collectionsSilver: safeNumber(metricsData.collections_silver),
+
         // Gold allocated
-        goldAllocatedPeriod: safeNumber(data.gold_18k_allocated) + 
-                            safeNumber(data.gold_22k_allocated) + 
-                            safeNumber(data.gold_24k_allocated),
-        gold18KAllocated: safeNumber(data.gold_18k_allocated),
-        gold22KAllocated: safeNumber(data.gold_22k_allocated),
-        gold24KAllocated: safeNumber(data.gold_24k_allocated),
-        silverAllocated: safeNumber(data.silver_allocated),
-        
+        goldAllocatedPeriod: safeNumber(metricsData.gold_18k_allocated) + 
+                            safeNumber(metricsData.gold_22k_allocated) + 
+                            safeNumber(metricsData.gold_24k_allocated),
+        gold18KAllocated: safeNumber(metricsData.gold_18k_allocated),
+        gold22KAllocated: safeNumber(metricsData.gold_22k_allocated),
+        gold24KAllocated: safeNumber(metricsData.gold_24k_allocated),
+        silverAllocated: safeNumber(metricsData.silver_allocated),
+
         // Dues & overdue
-        duesOutstanding: safeNumber(data.dues_outstanding),
-        overdueCount: safeNumber(data.overdue_count),
-        
+        duesOutstanding: safeNumber(metricsData.dues_outstanding),
+        overdueCount: safeNumber(metricsData.overdue_count),
+
         // Enrollments
-        totalEnrollmentsPeriod: safeNumber(data.total_enrollments_period),
-        activeEnrollmentsPeriod: safeNumber(data.active_enrollments_period),
-        
+        totalEnrollmentsPeriod: safeNumber(metricsData.total_enrollments_period),
+        activeEnrollmentsPeriod: safeNumber(metricsData.active_enrollments_period),
+
         // Customers
-        totalCustomersPeriod: safeNumber(data.total_customers_period),
-        activeCustomersPeriod: safeNumber(data.active_customers_period),
-        
+        totalCustomersPeriod: safeNumber(metricsData.total_customers_period),
+        activeCustomersPeriod: safeNumber(metricsData.active_customers_period),
+
         // Redemptions (these weren't in the RPC function, set to 0 for now)
         readyToRedeemPeriod: 0,
         completedRedemptionsPeriod: 0,
-        
+
         // Dues breakdown (not in RPC yet, keeping 0 for now)
         dues18K: 0,
         dues22K: 0,
         dues24K: 0,
         duesSilver: 0,
-        
+
         // Current rates
         currentRates: {
-          k18: data.current_rates?.['18K'] ? {
-            rate: safeNumber(data.current_rates['18K'].rate),
-            validFrom: data.current_rates['18K'].valid_from || new Date().toISOString(),
+          k18: metricsData.current_rates?.['18K'] ? {
+            rate: safeNumber(metricsData.current_rates['18K'].rate),
+            validFrom: metricsData.current_rates['18K'].valid_from || new Date().toISOString(),
           } : null,
-          k22: data.current_rates?.['22K'] ? {
-            rate: safeNumber(data.current_rates['22K'].rate),
-            validFrom: data.current_rates['22K'].valid_from || new Date().toISOString(),
+          k22: metricsData.current_rates?.['22K'] ? {
+            rate: safeNumber(metricsData.current_rates['22K'].rate),
+            validFrom: metricsData.current_rates['22K'].valid_from || new Date().toISOString(),
           } : null,
-          k24: data.current_rates?.['24K'] ? {
-            rate: safeNumber(data.current_rates['24K'].rate),
-            validFrom: data.current_rates['24K'].valid_from || new Date().toISOString(),
+          k24: metricsData.current_rates?.['24K'] ? {
+            rate: safeNumber(metricsData.current_rates['24K'].rate),
+            validFrom: metricsData.current_rates['24K'].valid_from || new Date().toISOString(),
           } : null,
-          silver: data.current_rates?.SILVER ? {
-            rate: safeNumber(data.current_rates.SILVER.rate),
-            validFrom: data.current_rates.SILVER.valid_from || new Date().toISOString(),
+          silver: metricsData.current_rates?.SILVER ? {
+            rate: safeNumber(metricsData.current_rates.SILVER.rate),
+            validFrom: metricsData.current_rates.SILVER.valid_from || new Date().toISOString(),
           } : null,
         },
       });
