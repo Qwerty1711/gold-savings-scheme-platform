@@ -37,7 +37,7 @@ BEGIN
   ),
   -- Dues/Overdue logic
   billing AS (
-    SELECT eb.*, e.karat
+    SELECT eb.id, eb.enrollment_id, eb.due_date, eb.primary_paid, e.karat, e.commitment_amount
     FROM enrollment_billing_months eb
     JOIN enrollments e ON eb.enrollment_id = e.id
     WHERE e.retailer_id = p_retailer_id
@@ -51,9 +51,15 @@ BEGIN
   ),
   -- Eligible enrollments for ready to redeem (same as dashboard logic)
   eligible_enrollments AS (
-    SELECT e.*,
-      st.duration_months,
+    SELECT
+      e.id,
+      e.maturity_date,
+      e.created_at,
+      e.duration_months,
+      e.status,
+      e.plan_id,
       e.commitment_amount,
+      st.duration_months AS st_duration_months,
       (
         SELECT SUM(t.amount_paid) FROM transactions t
         WHERE t.enrollment_id = e.id AND t.retailer_id = p_retailer_id AND t.payment_status = 'SUCCESS' AND t.txn_type = 'PRIMARY_INSTALLMENT'
@@ -82,8 +88,8 @@ BEGIN
     'silver_allocated', COALESCE((SELECT SUM(grams_allocated_snapshot) FROM txns WHERE karat = 'SILVER'), 0),
 
     -- Dues & overdue
-    'dues_outstanding', COALESCE((SELECT SUM(CASE WHEN NOT primary_paid THEN e.commitment_amount ELSE 0 END) FROM enrollment_billing_months eb JOIN enrollments e ON eb.enrollment_id = e.id WHERE e.retailer_id = p_retailer_id AND eb.due_date >= p_start_date::date AND eb.due_date < p_end_date::date), 0),
-    'overdue_count', COALESCE((SELECT COUNT(*) FROM enrollment_billing_months eb JOIN enrollments e ON eb.enrollment_id = e.id WHERE e.retailer_id = p_retailer_id AND eb.due_date < CURRENT_DATE AND NOT primary_paid), 0),
+    'dues_outstanding', COALESCE((SELECT SUM(CASE WHEN NOT billing.primary_paid THEN billing.commitment_amount ELSE 0 END) FROM billing), 0),
+    'overdue_count', COALESCE((SELECT COUNT(*) FROM billing WHERE billing.due_date < CURRENT_DATE AND NOT billing.primary_paid), 0),
 
     -- Enrollments
     'total_enrollments_period', (SELECT COUNT(*) FROM enrollments WHERE retailer_id = p_retailer_id AND created_at >= p_start_date AND created_at < p_end_date),
@@ -96,15 +102,15 @@ BEGIN
     -- Redemptions
     'completed_redemptions_period', (SELECT COUNT(*) FROM completed_redemptions_period),
     'ready_to_redeem_period', (
-      SELECT COUNT(*) FROM eligible_enrollments e
+      SELECT COUNT(*) FROM eligible_enrollments
       WHERE
         -- Maturity date has passed or is today
         (
-          (e.maturity_date IS NOT NULL AND e.maturity_date <= CURRENT_DATE)
-          OR (e.maturity_date IS NULL AND e.created_at + (interval '1 month' * e.duration_months) <= CURRENT_DATE)
+          (maturity_date IS NOT NULL AND maturity_date <= CURRENT_DATE)
+          OR (maturity_date IS NULL AND created_at + (interval '1 month' * st_duration_months) <= CURRENT_DATE)
         )
-        AND e.total_grams > 0
-         AND e.total_primary_paid >= (e.commitment_amount * e.duration_months)
+        AND total_grams > 0
+         AND total_primary_paid >= (commitment_amount * st_duration_months)
     ),
     -- Current rates
     'current_rates', (
