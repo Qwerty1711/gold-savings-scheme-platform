@@ -34,7 +34,7 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
-, "app/(dashboard)/pulse/page.tsx.bkp", "app/(dashboard)/pulse/page.tsx.backupnew"  ],
+, "app/(dashboard)/pulse/page.tsx", "app/(dashboard)/pulse/page.tsx.backupnew"  ],
   "exclude": [
     "node_modules"
   ]

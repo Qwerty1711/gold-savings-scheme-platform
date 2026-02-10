@@ -1,6 +1,8 @@
-'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+
+import CustomerPulseClient from './CustomerPulseClient';
+import { supabase } from '@/lib/supabase/client';
+import { cookies } from 'next/headers';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -32,179 +34,77 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { readCustomerCache, writeCustomerCache } from '@/lib/utils/customer-cache';
-import { CustomerLoadingSkeleton } from '@/components/customer/loading-skeleton';
 
-type CustomerMetrics = {
-  totalCollections: number;
-  goldAllocated: number;
-  silverAllocated: number;
-  duesOutstanding: number;
-  overdueCount: number;
-  activeEnrollments: number;
-  currentRates: {
-    k18: { rate: number; validFrom: string } | null;
-    k22: { rate: number; validFrom: string } | null;
-    k24: { rate: number; validFrom: string } | null;
-    silver: { rate: number; validFrom: string } | null;
+export default async function CustomerPulsePage() {
+  // TODO: Replace with actual customer auth/session extraction
+  const cookieStore = cookies();
+  const customerId = cookieStore.get('customer_id')?.value;
+  const retailerId = cookieStore.get('retailer_id')?.value;
+  // Default filters
+  const schemeFilter = 'ALL';
+  const timeFilter = 'MONTH';
+  const customStart = '';
+  const customEnd = '';
+
+  // Calculate date range
+  const now = new Date();
+  let startISO: string;
+  let endISO: string;
+  const startOfDayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+  const endOfDayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0, 0));
+  const toISO = (d: Date) => d.toISOString();
+  const startOfMonthUTC = (d: Date) => {
+    const s = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1, 0, 0, 0, 0));
+    const e = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1, 0, 0, 0, 0));
+    return { s, e };
   };
-};
-
-type Transaction = {
-  id: string;
-  amount_paid: number;
-  grams_allocated_snapshot: number;
-  paid_at: string;
-  txn_type: string;
-  enrollment_id: string;
-  scheme_name?: string;
-};
-
-type PortfolioPoint = {
-  date: string;
-  contributions: number;
-  value: number;
-};
-
-type AvgPricePoint = {
-  date: string;
-  avgBuyGold?: number;
-  marketGold?: number;
-  avgBuySilver?: number;
-  marketSilver?: number;
-};
-
-type EfficiencyPoint = {
-  month: string;
-  efficiency: number;
-};
-
-type CustomerPulseCache = {
-  metrics: CustomerMetrics | null;
-  transactions: Transaction[];
-  portfolioSeries: PortfolioPoint[];
-  avgPriceSeries: AvgPricePoint[];
-  efficiencySeries: EfficiencyPoint[];
-  growthRate: number | null;
-  portfolioValue: number;
-};
-
-type SchemeOption = {
-  id: string;
-  name: string;
-  karat: string;
-  status: string;
-};
-
-function safeNumber(v: unknown): number {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function toDateKey(value: string | Date): string {
-  return new Date(value).toISOString().split('T')[0];
-}
-
-function formatCurrency(value: number): string {
-  return `₹${Math.round(value).toLocaleString('en-IN')}`;
-}
-
-function computeXirr(cashflows: { amount: number; date: string }[]): number | null {
-  if (cashflows.length < 2) return null;
-  const hasPositive = cashflows.some((flow) => flow.amount > 0);
-  const hasNegative = cashflows.some((flow) => flow.amount < 0);
-  if (!hasPositive || !hasNegative) return null;
-
-  const baseDate = new Date(cashflows[0].date);
-  const yearFractions = cashflows.map((flow) => {
-    const days = (new Date(flow.date).getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24);
-    return days / 365;
-  });
-
-  let rate = 0.1;
-  for (let i = 0; i < 50; i += 1) {
-    let f = 0;
-    let df = 0;
-
-    for (let j = 0; j < cashflows.length; j += 1) {
-      const t = yearFractions[j];
-      const denom = Math.pow(1 + rate, t);
-      f += cashflows[j].amount / denom;
-      df += -t * cashflows[j].amount / (denom * (1 + rate));
-    }
-
-    if (Math.abs(f) < 1e-6) return rate;
-    if (Math.abs(df) < 1e-10) return null;
-
-    const nextRate = rate - f / df;
-    if (nextRate <= -0.9999 || !Number.isFinite(nextRate)) return null;
-    rate = nextRate;
+  if (timeFilter === 'MONTH') {
+    const { s, e } = startOfMonthUTC(now);
+    startISO = toISO(s); endISO = toISO(e);
+  } else {
+    startISO = toISO(startOfDayUTC);
+    endISO = toISO(endOfDayUTC);
   }
 
-  return null;
+  // Fetch metrics via RPC
+  let metrics: CustomerMetrics | null = null;
+  let transactions: Transaction[] = [];
+  let portfolioSeries: PortfolioPoint[] = [];
+  let avgPriceSeries: AvgPricePoint[] = [];
+  let efficiencySeries: EfficiencyPoint[] = [];
+  let growthRate: number | null = null;
+  let portfolioValue: number = 0;
+  let loading = false;
+  let periodLabel = 'This Month';
+
+  if (customerId && retailerId) {
+    const { data: snapshot, error: snapshotError } = await supabase.rpc('get_customer_pulse_snapshot', {
+      p_retailer_id: retailerId,
+      p_customer_id: customerId,
+      p_start: startISO,
+      p_end: endISO,
+    });
+    if (!snapshotError && snapshot) {
+      metrics = (snapshot as any).metrics || null;
+      transactions = Array.isArray((snapshot as any).transactions) ? (snapshot as any).transactions : [];
+      // TODO: Add portfolioSeries, avgPriceSeries, efficiencySeries, growthRate, portfolioValue from snapshot if available
+    }
+  }
+
+  return (
+    <CustomerPulseClient
+      metrics={metrics}
+      transactions={transactions}
+      portfolioSeries={portfolioSeries}
+      avgPriceSeries={avgPriceSeries}
+      efficiencySeries={efficiencySeries}
+      growthRate={growthRate}
+      portfolioValue={portfolioValue}
+      loading={loading}
+      periodLabel={periodLabel}
+    />
+  );
 }
-
-export default function CustomerPulsePage() {
-  const { customer, user } = useCustomerAuth();
-  
-  const [metrics, setMetrics] = useState<CustomerMetrics | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [portfolioSeries, setPortfolioSeries] = useState<PortfolioPoint[]>([]);
-  const [avgPriceSeries, setAvgPriceSeries] = useState<AvgPricePoint[]>([]);
-  const [efficiencySeries, setEfficiencySeries] = useState<EfficiencyPoint[]>([]);
-  const [growthRate, setGrowthRate] = useState<number | null>(null);
-  const [portfolioValue, setPortfolioValue] = useState<number>(0);
-  const [schemeOptions, setSchemeOptions] = useState<SchemeOption[]>([]);
-  const [schemeFilter, setSchemeFilter] = useState<string>('ALL');
-  const [loading, setLoading] = useState(true);
-  const [timeFilter, setTimeFilter] = useState<'DAY' | 'WEEK' | 'MONTH' | 'YEAR' | 'RANGE'>('MONTH');
-  const [customStart, setCustomStart] = useState<string>('');
-  const [customEnd, setCustomEnd] = useState<string>('');
-  
-  const periodLabel = useMemo(() => {
-    switch (timeFilter) {
-      case 'DAY': return 'Today';
-      case 'WEEK': return 'This Week';
-      case 'MONTH': return 'This Month';
-      case 'YEAR': return 'This Year';
-      default: return 'Selected Range';
-    }
-  }, [timeFilter]);
-
-  useEffect(() => {
-    if (!customer?.id) return;
-    const cacheKey = `customer:pulse:${customer.id}:${schemeFilter}:${timeFilter}:${customStart || 'na'}:${customEnd || 'na'}`;
-    const cached = readCustomerCache<CustomerPulseCache>(cacheKey);
-    if (cached) {
-      setMetrics(cached.metrics);
-      setTransactions(cached.transactions);
-      setPortfolioSeries(cached.portfolioSeries || []);
-      setAvgPriceSeries(cached.avgPriceSeries || []);
-      setEfficiencySeries(cached.efficiencySeries || []);
-      setGrowthRate(cached.growthRate ?? null);
-      setPortfolioValue(cached.portfolioValue || 0);
-      setLoading(false);
-      void loadDashboard(true);
-      return;
-    }
-    void loadDashboard();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customer?.id, schemeFilter, timeFilter, customStart, customEnd]);
-
-  async function loadDashboard(silent = false) {
-    if (!customer?.id && !user?.id) return;
-    if (!silent) setLoading(true);
-
-    try {
-      const retailerId = customer?.retailer_id;
-      const customerId = customer?.id || user?.id;
-      const authUserId = user?.id;
-      
-      // Calculate date range
-      const now = new Date();
-      let startISO: string;
-      let endISO: string;
-      
-      const startOfDayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
       const endOfDayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0, 0));
       const toISO = (d: Date) => d.toISOString();
       
@@ -249,49 +149,7 @@ export default function CustomerPulsePage() {
       const rangeStartKey = toDateKey(startISO);
       const rangeEndKey = toDateKey(new Date(new Date(endISO).getTime() - 1));
 
-      if (customer?.id) {
-        const { data: snapshot, error: snapshotError } = await supabase.rpc('get_customer_pulse_snapshot', {
-          p_retailer_id: retailerId ?? null,
-          p_customer_id: customer.id,
-          p_start: startISO,
-          p_end: endISO,
-        });
 
-        if (!snapshotError && snapshot) {
-          const metricsData = (snapshot as any).metrics || {};
-          const txnsData = Array.isArray((snapshot as any).transactions)
-            ? (snapshot as any).transactions
-            : [];
-
-          const nextMetrics: CustomerMetrics = {
-            totalCollections: safeNumber(metricsData.totalCollections),
-            goldAllocated: safeNumber(metricsData.goldAllocated),
-            silverAllocated: safeNumber(metricsData.silverAllocated),
-            duesOutstanding: safeNumber(metricsData.duesOutstanding),
-            overdueCount: safeNumber(metricsData.overdueCount),
-            activeEnrollments: safeNumber(metricsData.activeEnrollments),
-            currentRates: {
-              k18: metricsData.currentRates?.k18 ?? null,
-              k22: metricsData.currentRates?.k22 ?? null,
-              k24: metricsData.currentRates?.k24 ?? null,
-              silver: metricsData.currentRates?.silver ?? null,
-            },
-          };
-
-          setMetrics(nextMetrics);
-          setTransactions(txnsData as Transaction[]);
-        }
-      }
-
-      // Fetch customer's enrollments
-      let enrollmentsQuery = supabase
-        .from('enrollments')
-        .select('id, plan_id, karat, status, commitment_amount, scheme_templates(name, installment_amount, duration_months)');
-
-      if (customerId && authUserId && customerId !== authUserId) {
-        enrollmentsQuery = enrollmentsQuery.in('customer_id', [customerId, authUserId]);
-      } else if (customerId) {
-        enrollmentsQuery = enrollmentsQuery.eq('customer_id', customerId);
       }
 
       if (retailerId) {
