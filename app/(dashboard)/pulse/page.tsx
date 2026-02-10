@@ -160,6 +160,7 @@ export default function PulseDashboard() {
       // ✅ Start performance timer
       const startTime = performance.now();
       
+
       // ✅ SINGLE RPC CALL - replaces all the queries below
       const { data, error } = await supabase.rpc('get_dashboard_metrics', {
         p_retailer_id: profile.retailer_id,
@@ -167,7 +168,8 @@ export default function PulseDashboard() {
         p_end_date: endDate.toISOString(),
       });
 
-      const metricsData = data?.get_dashboard_metrics || {};
+      // Fix: Use data directly (not nested)
+      const metricsData = data || {};
 
       // ✅ Log performance
       const duration = performance.now() - startTime;
@@ -210,9 +212,9 @@ export default function PulseDashboard() {
         totalCustomersPeriod: safeNumber(metricsData.total_customers_period),
         activeCustomersPeriod: safeNumber(metricsData.active_customers_period),
 
-        // Redemptions (these weren't in the RPC function, set to 0 for now)
-        readyToRedeemPeriod: 0,
-        completedRedemptionsPeriod: 0,
+        // Redemptions (now from RPC)
+        readyToRedeemPeriod: safeNumber(metricsData.ready_to_redeem_period),
+        completedRedemptionsPeriod: safeNumber(metricsData.completed_redemptions_period),
 
         // Dues breakdown (not in RPC yet, keeping 0 for now)
         dues18K: 0,

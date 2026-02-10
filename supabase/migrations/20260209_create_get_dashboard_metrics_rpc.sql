@@ -43,6 +43,29 @@ BEGIN
     WHERE e.retailer_id = p_retailer_id
       AND eb.due_date >= p_start_date::date
       AND eb.due_date < p_end_date::date
+  ),
+  completed_redemptions_period AS (
+    SELECT * FROM redemptions
+    WHERE retailer_id = p_retailer_id
+      AND redemption_status = 'COMPLETED'
+  ),
+  -- Eligible enrollments for ready to redeem (same as dashboard logic)
+  eligible_enrollments AS (
+    SELECT e.*,
+      st.duration_months,
+      e.commitment_amount,
+      (
+        SELECT SUM(t.amount_paid) FROM transactions t
+        WHERE t.enrollment_id = e.id AND t.retailer_id = p_retailer_id AND t.payment_status = 'SUCCESS' AND t.txn_type = 'PRIMARY_INSTALLMENT'
+      ) AS total_primary_paid,
+      (
+        SELECT SUM(t.grams_allocated_snapshot) FROM transactions t
+        WHERE t.enrollment_id = e.id AND t.retailer_id = p_retailer_id AND t.payment_status = 'SUCCESS'
+      ) AS total_grams
+    FROM enrollments e
+    JOIN scheme_templates st ON e.plan_id = st.id
+    WHERE e.retailer_id = p_retailer_id
+      AND e.status = 'ACTIVE'
   )
   SELECT jsonb_build_object(
     -- Collections
@@ -70,6 +93,19 @@ BEGIN
     'total_customers_period', (SELECT COUNT(*) FROM customers WHERE retailer_id = p_retailer_id AND created_at >= p_start_date AND created_at < p_end_date),
     'active_customers_period', (SELECT COUNT(*) FROM customers WHERE retailer_id = p_retailer_id AND status = 'ACTIVE'),
 
+    -- Redemptions
+    'completed_redemptions_period', (SELECT COUNT(*) FROM completed_redemptions_period),
+    'ready_to_redeem_period', (
+      SELECT COUNT(*) FROM eligible_enrollments e
+      WHERE
+        -- Maturity date has passed or is today
+        (
+          (e.maturity_date IS NOT NULL AND e.maturity_date <= CURRENT_DATE)
+          OR (e.maturity_date IS NULL AND e.created_at + (interval '1 month' * e.duration_months) <= CURRENT_DATE)
+        )
+        AND e.total_grams > 0
+         AND e.total_primary_paid >= (e.commitment_amount * e.duration_months)
+    ),
     -- Current rates
     'current_rates', (
       SELECT jsonb_object_agg(karat, jsonb_build_object('rate', rate_per_gram, 'valid_from', effective_from))
