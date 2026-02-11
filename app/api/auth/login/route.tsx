@@ -1,30 +1,50 @@
-// app/api/auth/login/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/auth-helpers-nextjs';
 
-export async function POST(req: NextRequest) {
-  const { email, password } = await req.json();
+export async function POST(req: Request) {
+  const body = await req.json();
+  const { email, password } = body;
 
   if (!email || !password) {
-    return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
+    return NextResponse.json({ error: 'Email and password required' }, { status: 400 });
   }
 
-  const supabase = createClient(
+  // Create Supabase server client using service role
+  const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  try {
+    const { data, error } = await supabase.auth.admin.signInWithPassword({ email, password });
 
-  if (error || !data.session) {
-    return NextResponse.json({ error: error?.message || 'Login failed' }, { status: 401 });
+    if (error) throw error;
+
+    const session = data.session;
+    if (!session) throw new Error('No session returned');
+
+    // Set HTTP-only cookies for SSR
+    const response = NextResponse.json({ user: data.user });
+
+    response.cookies.set('sb-access-token', session.access_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      sameSite: 'lax',
+      maxAge: session.expires_in,
+    });
+
+    response.cookies.set('sb-refresh-token', session.refresh_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+    });
+
+    return response;
+  } catch (err: any) {
+    console.error('Login error:', err);
+    return NextResponse.json({ error: err.message || 'Login failed' }, { status: 400 });
   }
-
-  const res = NextResponse.json({ user: data.user });
-
-  // Set SSR-friendly cookies
-  res.cookies.set('sb-access-token', data.session.access_token, { path: '/', httpOnly: true });
-  res.cookies.set('sb-refresh-token', data.session.refresh_token, { path: '/', httpOnly: true });
-
-  return res;
 }

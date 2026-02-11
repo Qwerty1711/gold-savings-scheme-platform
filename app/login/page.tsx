@@ -11,6 +11,14 @@ import { useRouter } from 'next/navigation';
 import { AnimatedLogo } from '@/components/ui/animated-logo';
 import { PublicBrandingProvider, usePublicBranding } from '@/lib/contexts/public-branding-context';
 
+export default function LoginPage() {
+  return (
+    <PublicBrandingProvider>
+      <LoginFormInner />
+    </PublicBrandingProvider>
+  );
+}
+
 function LoginFormInner() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -26,7 +34,7 @@ function LoginFormInner() {
     setLoading(true);
 
     try {
-      // --- Call server-side login API ---
+      // Call server-side login API
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -34,11 +42,9 @@ function LoginFormInner() {
       });
 
       const result = await res.json();
-
       if (!res.ok) throw new Error(result.error || 'Login failed');
 
-      // Success → redirect to Pulse dashboard
-      router.push('/pulse');
+      router.push('/pulse'); // Redirect after successful login
     } catch (err: any) {
       setError(err?.message ?? 'Failed to sign in');
     } finally {
@@ -57,18 +63,13 @@ function LoginFormInner() {
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background via-gold-50/20 to-background">
       <div className="w-full max-w-md space-y-6">
-
         <div className="text-center space-y-2">
           <div className="flex justify-center mb-4">
             <AnimatedLogo logoUrl={null} size="lg" showAnimation />
           </div>
-
           <div className="rounded-2xl bg-gradient-to-r from-gold-400 via-gold-500 to-gold-600 py-3 px-6">
-            <h1 className="text-2xl font-bold text-white">
-              {branding.name}
-            </h1>
+            <h1 className="text-2xl font-bold text-white">{branding.name}</h1>
           </div>
-
           <div className="flex justify-center gap-2 text-sm text-muted-foreground mt-2">
             <Sparkles className="w-4 h-4 text-primary" />
             <span>Trusted by Jewellers Across India</span>
@@ -78,9 +79,7 @@ function LoginFormInner() {
         <Card>
           <CardHeader>
             <CardTitle>Sign In</CardTitle>
-            <CardDescription>
-              Enter your credentials to access your dashboard
-            </CardDescription>
+            <CardDescription>Enter your credentials to access your dashboard</CardDescription>
           </CardHeader>
 
           <CardContent>
@@ -118,18 +117,8 @@ function LoginFormInner() {
           </CardContent>
         </Card>
 
-        <p className="text-center text-sm text-muted-foreground">
-          © 2026 {branding.businessName}
-        </p>
+        <p className="text-center text-sm text-muted-foreground">© 2026 {branding.businessName}</p>
       </div>
     </div>
-  );
-}
-
-export default function LoginPage() {
-  return (
-    <PublicBrandingProvider>
-      <LoginFormInner />
-    </PublicBrandingProvider>
   );
 }
