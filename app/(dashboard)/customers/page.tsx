@@ -1,5 +1,6 @@
 import { createServerClient } from '@/lib/supabase/server';
 import CustomersClient from './customers-client';
+import { redirect } from 'next/navigation';
 
 export default async function CustomersPage() {
   const supabase = createServerClient();
@@ -9,18 +10,12 @@ export default async function CustomersPage() {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
-      console.error('❌ Customers - Auth error:', authError);
-      return (
-        <CustomersClient 
-          customers={[]} 
-          loading={false} 
-          error="Authentication required. Please log in."
-          rlsError={false}
-        />
-      );
+      console.error('Auth error:', authError);
+      redirect('/login');
+      return;
     }
     
-    console.log('✅ Customers - User authenticated:', user.id);
+    console.log('✅ User authenticated:', user.id);
     
     // 2. Get user's retailer_id from user_profiles
     const { data: profile, error: profileError } = await supabase
@@ -30,30 +25,28 @@ export default async function CustomersPage() {
       .single();
     
     if (profileError || !profile) {
-      console.error('❌ Customers - Profile error:', profileError);
+      console.error('❌ Profile error:', profileError);
       return (
         <CustomersClient 
           customers={[]} 
           loading={false} 
           error="User profile not found. Please contact support."
-          rlsError={false}
         />
       );
     }
     
     if (!profile.retailer_id) {
-      console.error('❌ Customers - No retailer_id in profile:', profile);
+      console.error('❌ No retailer_id in profile:', profile);
       return (
         <CustomersClient 
           customers={[]} 
           loading={false} 
           error="No retailer associated with your account. Please contact support."
-          rlsError={false}
         />
       );
     }
     
-    console.log('✅ Customers - Profile loaded:', {
+    console.log('✅ Profile loaded:', {
       retailerId: profile.retailer_id,
       role: profile.role,
       name: profile.full_name,
@@ -62,13 +55,32 @@ export default async function CustomersPage() {
     // 3. Fetch customers for this retailer
     const { data: customers, error: customersError } = await supabase
       .from('customers')
-      .select('*')
+      .select(`
+        id,
+        customer_code,
+        full_name,
+        phone,
+        email,
+        date_of_birth,
+        address,
+        city,
+        state,
+        pincode,
+        pan_number,
+        aadhar_number,
+        status,
+        created_at,
+        updated_at,
+        retailer_id,
+        store_id,
+        user_id
+      `)
       .eq('retailer_id', profile.retailer_id)
       .order('created_at', { ascending: false });
     
     if (customersError) {
-      console.error('❌ Customers - Query error:', customersError);
-      console.error('❌ Customers - Error details:', {
+      console.error('❌ Customers query error:', customersError);
+      console.error('❌ Error details:', {
         message: customersError.message,
         code: customersError.code,
         details: customersError.details,
@@ -76,27 +88,29 @@ export default async function CustomersPage() {
       });
       
       // If RLS is blocking, provide helpful error
-      const isRLSError = 
-        customersError.code === 'PGRST301' || 
-        customersError.message?.includes('RLS') ||
-        customersError.message?.includes('policy');
+      if (customersError.code === 'PGRST301' || customersError.message.includes('RLS')) {
+        return (
+          <CustomersClient 
+            customers={[]} 
+            loading={false} 
+            error="Database access denied. Please check RLS policies for customers table."
+            rlsError={true}
+          />
+        );
+      }
       
       return (
         <CustomersClient 
           customers={[]} 
           loading={false} 
-          error={isRLSError 
-            ? "Database access denied. RLS policies may be blocking access." 
-            : `Failed to load customers: ${customersError.message}`}
-          rlsError={isRLSError}
+          error={`Failed to load customers: ${customersError.message}`}
         />
       );
     }
     
-    console.log('✅ Customers - Data loaded:', {
+    console.log('✅ Customers loaded:', {
       count: customers?.length || 0,
       retailerId: profile.retailer_id,
-      firstCustomer: customers?.[0]?.full_name,
     });
     
     // 4. Pass data to client component
@@ -106,18 +120,16 @@ export default async function CustomersPage() {
         loading={false}
         retailerName={profile.full_name || 'Unknown'}
         error={null}
-        rlsError={false}
       />
     );
     
   } catch (error) {
-    console.error('❌ Customers - Unexpected error:', error);
+    console.error('❌ Unexpected error in CustomersPage:', error);
     return (
       <CustomersClient 
         customers={[]} 
         loading={false} 
         error="An unexpected error occurred. Please try again."
-        rlsError={false}
       />
     );
   }

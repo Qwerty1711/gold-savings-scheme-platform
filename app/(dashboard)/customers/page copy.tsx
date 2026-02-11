@@ -1,5 +1,5 @@
 
-import CustomersClient from './CustomersClient';
+import CustomersClient from './customers-client';
 import { supabase } from '@/lib/supabase/client';
 
 export default async function CustomersPage() {
