@@ -1,4 +1,4 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient as createSupabaseServerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 
 /**
@@ -10,12 +10,15 @@ import { cookies } from 'next/headers';
  */
 export function createServerClient() {
   const cookieStore = cookies();
-  
-  return createServerComponentClient(
-    { cookies: () => cookieStore },
+  return createSupabaseServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
-      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      cookies: {
+        get: (name) => cookieStore.get(name)?.value,
+        set: () => {}, // No-op for server-side rendering
+        remove: () => {}, // No-op for server-side rendering
+      },
     }
   );
 }

@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase/client';
+import { createServerClient } from '@/lib/supabase/server';
 import { PulseClient } from './pulse-client';
 
 export default async function PulsePage() {
@@ -9,15 +9,18 @@ export default async function PulsePage() {
 
   let metrics = {};
   try {
-    // Get user and retailer_id from user_profiles
-    const { data: { user } } = await supabase.auth.getUser();
+    // Use server-side Supabase client
+    const supabase = createServerClient();
+    // Get session
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     let retailerId = '';
     if (user?.id) {
       const { data: profile } = await supabase
         .from('user_profiles')
         .select('retailer_id')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
       retailerId = profile?.retailer_id || '';
     }
 

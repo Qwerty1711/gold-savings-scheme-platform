@@ -27,22 +27,18 @@ export default async function CustomersPage() {
     if (profileError || !profile) {
       console.error('❌ Profile error:', profileError);
       return (
-        <CustomersClient 
-          customers={[]} 
-          loading={false} 
-          error="User profile not found. Please contact support."
-        />
+        <div className="flex items-center justify-center h-64 text-red-600">
+          User profile not found. Please contact support.
+        </div>
       );
     }
     
     if (!profile.retailer_id) {
       console.error('❌ No retailer_id in profile:', profile);
       return (
-        <CustomersClient 
-          customers={[]} 
-          loading={false} 
-          error="No retailer associated with your account. Please contact support."
-        />
+        <div className="flex items-center justify-center h-64 text-red-600">
+          No retailer associated with your account. Please contact support.
+        </div>
       );
     }
     
@@ -90,21 +86,16 @@ export default async function CustomersPage() {
       // If RLS is blocking, provide helpful error
       if (customersError.code === 'PGRST301' || customersError.message.includes('RLS')) {
         return (
-          <CustomersClient 
-            customers={[]} 
-            loading={false} 
-            error="Database access denied. Please check RLS policies for customers table."
-            rlsError={true}
-          />
+          <div className="flex items-center justify-center h-64 text-red-600">
+            Database access denied. Please check RLS policies for customers table.
+          </div>
         );
       }
       
       return (
-        <CustomersClient 
-          customers={[]} 
-          loading={false} 
-          error={`Failed to load customers: ${customersError.message}`}
-        />
+        <div className="flex items-center justify-center h-64 text-red-600">
+          Failed to load customers: {customersError.message}
+        </div>
       );
     }
     
@@ -118,19 +109,15 @@ export default async function CustomersPage() {
       <CustomersClient 
         customers={customers || []} 
         loading={false}
-        retailerName={profile.full_name || 'Unknown'}
-        error={null}
       />
     );
     
   } catch (error) {
     console.error('❌ Unexpected error in CustomersPage:', error);
     return (
-      <CustomersClient 
-        customers={[]} 
-        loading={false} 
-        error="An unexpected error occurred. Please try again."
-      />
+      <div className="flex items-center justify-center h-64 text-red-600">
+        An unexpected error occurred. Please try again.
+      </div>
     );
   }
 }
