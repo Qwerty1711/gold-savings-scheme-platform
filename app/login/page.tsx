@@ -37,7 +37,7 @@ function LoginFormInner() {
 
       if (!res.ok) throw new Error(result.error || 'Login failed');
 
-      // Redirect to Pulse page
+      // Success → redirect to Pulse dashboard
       router.push('/pulse');
     } catch (err: any) {
       setError(err?.message ?? 'Failed to sign in');

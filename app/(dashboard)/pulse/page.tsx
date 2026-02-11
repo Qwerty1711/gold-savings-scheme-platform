@@ -10,7 +10,6 @@ console.log("SUPABASE ANON:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 console.log("SERVICE ROLE:", process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 export default async function PulsePage() {
-  // Get current month date range
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
@@ -18,10 +17,8 @@ export default async function PulsePage() {
   let metrics = {};
 
   try {
-    // --- Create server client ---
-    const cookieStore = await cookies();
-
-    // DEV: log all cookies to debug Fast Refresh session loss
+    // --- SSR cookie store ---
+    const cookieStore = cookies();
     console.log('All cookies:', cookieStore.getAll());
 
     const supabase = createSupabaseServerClient(
@@ -30,8 +27,8 @@ export default async function PulsePage() {
       {
         cookies: {
           get: (name) => cookieStore.get(name)?.value,
-          set: () => {}, // no-op SSR
-          remove: () => {}, // no-op SSR
+          set: () => {},     // no-op on server
+          remove: () => {},  // no-op on server
         },
       }
     );
@@ -39,7 +36,6 @@ export default async function PulsePage() {
     // Get authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    // If session missing, redirect to login
     if (authError || !user) {
       console.warn('No active session. Redirecting to login.', authError);
       redirect('/login');
