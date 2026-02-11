@@ -1,24 +1,21 @@
-import { createClient } from '@supabase/supabase-js';
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 
-// This function creates a Supabase client for server-side usage (no session persistence)
+/**
+ * CRITICAL: This creates a Supabase client for Server Components
+ * that properly handles user sessions and RLS policies.
+ * 
+ * The client uses cookies to maintain the user's session,
+ * which is required for RLS policies to work correctly.
+ */
 export function createServerClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Missing Supabase environment variables');
-  }
-
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-      detectSessionInUrl: false,
-    },
-    global: {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    },
-  });
+  const cookieStore = cookies();
+  
+  return createServerComponentClient(
+    { cookies: () => cookieStore },
+    {
+      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    }
+  );
 }
