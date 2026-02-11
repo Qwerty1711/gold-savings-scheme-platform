@@ -1,3 +1,8 @@
+
+console.log("SUPABASE URL:", process.env.NEXT_PUBLIC_SUPABASE_URL)
+console.log("SUPABASE ANON:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+console.log("SERVICE ROLE:", process.env.SUPABASE_SERVICE_ROLE_KEY)
+
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/auth-helpers-nextjs';
 import { PulseClient } from './pulse-client';
