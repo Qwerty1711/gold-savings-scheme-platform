@@ -1,10 +1,10 @@
-
-console.log("SUPABASE URL:", process.env.NEXT_PUBLIC_SUPABASE_URL)
-console.log("SUPABASE ANON:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
-console.log("SERVICE ROLE:", process.env.SUPABASE_SERVICE_ROLE_KEY)
+// Debug log for environment variables
+console.log("SUPABASE URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
+console.log("SUPABASE ANON:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+console.log("SERVICE ROLE:", process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 import { cookies } from 'next/headers';
-import { createServerClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient as createSupabaseServerClient } from '@supabase/auth-helpers-nextjs';
 import { PulseClient } from './pulse-client';
 
 export default async function PulsePage() {
@@ -14,9 +14,22 @@ export default async function PulsePage() {
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
   let metrics = {};
+
   try {
-    // Use server-side Supabase client with SSR session
-    const supabase = createServerClient({ cookies });
+    // --- Fix: create server client properly ---
+    const cookieStore = await cookies();
+    const supabase = createSupabaseServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get: (name) => cookieStore.get(name)?.value,
+          set: () => {}, // no-op for SSR
+          remove: () => {}, // no-op for SSR
+        },
+      }
+    );
+
     // Get authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
@@ -62,5 +75,6 @@ export default async function PulsePage() {
       </div>
     );
   }
+
   return <PulseClient initialMetrics={metrics} />;
 }
