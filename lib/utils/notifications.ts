@@ -56,7 +56,7 @@ export async function createNotification(payload: NotificationPayload, options: 
         p_retailer_id: retailerId,
         p_customer_id: customerId,
         p_enrollment_id: enrollmentId ?? null,
-        p_type: type,
+        p_template_key: type,
         p_message: message,
         p_metadata: metadata ?? {},
       });
@@ -76,7 +76,7 @@ export async function createNotification(payload: NotificationPayload, options: 
       retailer_id: retailerId,
       customer_id: customerId,
       enrollment_id: enrollmentId ?? null,
-      notification_type: type,
+      template_key: type,
       message,
       status: 'PENDING',
       scheduled_for: new Date().toISOString(),
@@ -93,7 +93,7 @@ export async function createNotification(payload: NotificationPayload, options: 
     await client.from('notification_queue').insert({
       retailer_id: retailerId,
       customer_id: customerId,
-      notification_type: type,
+      template_key: type,
       message,
       status: 'PENDING',
       scheduled_for: new Date().toISOString(),

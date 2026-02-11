@@ -3,7 +3,7 @@ CREATE OR REPLACE FUNCTION public.create_notification(
   p_retailer_id uuid,
   p_customer_id uuid,
   p_enrollment_id uuid DEFAULT NULL,
-  p_type notification_type,
+  p_template_key text,
   p_message text,
   p_metadata jsonb DEFAULT '{}'::jsonb
 )
@@ -28,7 +28,7 @@ BEGIN
       retailer_id,
       customer_id,
       enrollment_id,
-      notification_type,
+      template_key,
       message,
       status,
       scheduled_for,
@@ -38,7 +38,7 @@ BEGIN
       p_retailer_id,
       p_customer_id,
       p_enrollment_id,
-      p_type,
+      p_template_key,
       p_message,
       'PENDING',
       now(),
@@ -49,7 +49,7 @@ BEGIN
     INSERT INTO public.notification_queue (
       retailer_id,
       customer_id,
-      notification_type,
+      template_key,
       message,
       status,
       scheduled_for,
@@ -58,7 +58,7 @@ BEGIN
     ) VALUES (
       p_retailer_id,
       p_customer_id,
-      p_type,
+      p_template_key,
       p_message,
       'PENDING',
       now(),
@@ -69,4 +69,4 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.create_notification(uuid, uuid, uuid, notification_type, text, jsonb) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.create_notification(uuid, uuid, uuid, text, text, jsonb) TO authenticated;

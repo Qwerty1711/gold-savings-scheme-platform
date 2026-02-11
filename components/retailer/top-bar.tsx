@@ -36,7 +36,7 @@ export function TopBar() {
     if (!profile?.retailer_id) return;
     const { data, error } = await supabase
       .from('notification_queue')
-      .select('id, notification_type, message, status, created_at, metadata, payload')
+      .select('id, template_key, message, status, created_at, metadata, payload')
       .eq('retailer_id', profile.retailer_id)
       .order('created_at', { ascending: false })
       .limit(10);
@@ -127,7 +127,7 @@ export function TopBar() {
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
                             <Badge variant="outline" className="text-xs">
-                              {(notif.notification_type || 'GENERAL').replace(/_/g, ' ')}
+                              {(notif.template_key || 'GENERAL').replace(/_/g, ' ')}
                             </Badge>
                             {notif.status === 'PENDING' && (
                               <Badge className="bg-rose-100 text-rose-700 text-xs">New</Badge>

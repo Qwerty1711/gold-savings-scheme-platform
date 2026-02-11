@@ -2,7 +2,7 @@ import { createServerClient } from '@/lib/supabase/server';
 import { PulseClient } from './pulse-client';
 
 export default async function PulsePage() {
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
   
   // Get current month date range
   const now = new Date();

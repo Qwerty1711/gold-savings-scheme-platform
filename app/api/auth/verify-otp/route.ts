@@ -144,7 +144,7 @@ export async function POST(request: Request) {
       await supabaseAdmin.from('notification_queue').insert({
         retailer_id: effectiveRetailerId,
         customer_id: newCustomer.id,
-        notification_type: 'GENERAL',
+        template_key: 'GENERAL',
         message: `New customer registered: ${phone}`,
         status: 'PENDING',
         scheduled_for: new Date().toISOString(),

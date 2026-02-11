@@ -16,7 +16,7 @@ import { CustomerLoadingSkeleton } from '@/components/customer/loading-skeleton'
 
 type Notification = {
   id: string;
-  notification_type: string;
+  template_key: string;
   message: string | null;
   template_key: string | null;
   payload: any;
@@ -60,7 +60,7 @@ export default function NotificationsPage() {
     try {
       const { data } = await supabase
         .from('notification_queue')
-        .select('id, notification_type, message, template_key, payload, status, scheduled_for, sent_at, metadata, created_at')
+        .select('id, template_key, message, template_key, payload, status, scheduled_for, sent_at, metadata, created_at')
         .eq('customer_id', customer.id)
         .order('created_at', { ascending: false })
         .limit(50);
@@ -125,17 +125,17 @@ export default function NotificationsPage() {
 
         <div className="space-y-3">
           {notifications.map((notif) => (
-            <Card key={notif.id} className={getNotificationColor(notif.notification_type)}>
+            <Card key={notif.id} className={getNotificationColor(notif.template_key)}>
               <CardContent className="pt-6">
                 <div className="flex items-start gap-3">
                   <div className="flex-shrink-0">
-                    {getNotificationIcon(notif.notification_type)}
+                    {getNotificationIcon(notif.template_key)}
                   </div>
                   <div className="flex-1 space-y-2">
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <Badge variant="outline" className="text-xs mb-1">
-                          {(notif.template_key || notif.notification_type)?.replace(/_/g, ' ')}
+                          {(notif.template_key || 'GENERAL')?.replace(/_/g, ' ')}
                         </Badge>
                         <p className="text-sm font-medium">
                           {notif.message ||

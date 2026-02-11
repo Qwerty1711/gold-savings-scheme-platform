@@ -3,7 +3,7 @@ import CustomersClient from './customers-client';
 import { redirect } from 'next/navigation';
 
 export default async function CustomersPage() {
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
   
   try {
     // 1. Get authenticated user

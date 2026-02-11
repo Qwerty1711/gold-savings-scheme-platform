@@ -10,7 +10,7 @@ export default async function PulsePage() {
   let metrics = {};
   try {
     // Use server-side Supabase client
-    const supabase = createServerClient();
+    const supabase = await createServerClient();
     // Get session
     const { data: { session } } = await supabase.auth.getSession();
     const user = session?.user;

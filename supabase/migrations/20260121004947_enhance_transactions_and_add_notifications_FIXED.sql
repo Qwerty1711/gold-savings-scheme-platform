@@ -45,11 +45,7 @@ EXCEPTION
   WHEN duplicate_object THEN null;
 END $$;
 
-DO $$ BEGIN
-  CREATE TYPE notification_type AS ENUM ('DUE_REMINDER', 'PAYMENT_SUCCESS', 'SCHEME_MATURITY', 'MILESTONE_REACHED');
-EXCEPTION
-  WHEN duplicate_object THEN null;
-END $$;
+
 
 DO $$ BEGIN
   CREATE TYPE notification_status AS ENUM ('PENDING', 'SENT', 'FAILED', 'CANCELLED');
@@ -163,7 +159,7 @@ CREATE TABLE IF NOT EXISTS notification_queue (
   retailer_id uuid NOT NULL REFERENCES retailers(id) ON DELETE CASCADE,
   customer_id uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
   enrollment_id uuid REFERENCES enrollments(id) ON DELETE CASCADE,
-  notification_type notification_type NOT NULL,
+  template_key text NOT NULL,
   message text NOT NULL,
   status notification_status DEFAULT 'PENDING',
   scheduled_for timestamptz NOT NULL,
@@ -319,7 +315,7 @@ BEGIN
       IF NOT EXISTS (
         SELECT 1 FROM notification_queue
         WHERE scheme_id = v_enrollment.id
-          AND notification_type = 'DUE_REMINDER'
+          AND template_key = 'DUE_REMINDER'
           AND scheduled_for >= v_expected_payment_month
           AND status IN ('PENDING', 'SENT')
       ) THEN
@@ -328,7 +324,7 @@ BEGIN
           retailer_id,
           customer_id,
           scheme_id,
-          notification_type,
+          template_key,
           message,
           scheduled_for,
           channel,
