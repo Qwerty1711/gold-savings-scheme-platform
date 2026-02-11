@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { AnimatedLogo } from '@/components/ui/animated-logo';
 import { PublicBrandingProvider, usePublicBranding } from '@/lib/contexts/public-branding-context';
@@ -27,12 +26,18 @@ function LoginFormInner() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password
+      // --- Call server-side login API ---
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
       });
 
-      if (error) throw error;
+      const result = await res.json();
+
+      if (!res.ok) throw new Error(result.error || 'Login failed');
+
+      // Redirect to Pulse page
       router.push('/pulse');
     } catch (err: any) {
       setError(err?.message ?? 'Failed to sign in');
