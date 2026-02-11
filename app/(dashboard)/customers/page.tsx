@@ -1,11 +1,11 @@
 import { cookies } from 'next/headers';
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient } from '@supabase/auth-helpers-nextjs';
 import CustomersClient from './customers-client';
 import { redirect } from 'next/navigation';
 
 
 export default async function CustomersPage() {
-  const supabase = createServerComponentClient({ cookies });
+  const supabase = createServerClient({ cookies });
   try {
     // 1. Get authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser();

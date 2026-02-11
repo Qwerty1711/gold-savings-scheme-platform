@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient } from '@supabase/auth-helpers-nextjs';
 import { PulseClient } from './pulse-client';
 
 export default async function PulsePage() {
@@ -11,7 +11,7 @@ export default async function PulsePage() {
   let metrics = {};
   try {
     // Use server-side Supabase client with SSR session
-    const supabase = createServerComponentClient({ cookies });
+    const supabase = createServerClient({ cookies });
     // Get authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
