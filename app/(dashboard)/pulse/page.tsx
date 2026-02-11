@@ -1,4 +1,5 @@
-import { createServerClient } from '@/lib/supabase/server';
+import { cookies } from 'next/headers';
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { PulseClient } from './pulse-client';
 
 export default async function PulsePage() {
@@ -9,25 +10,33 @@ export default async function PulsePage() {
 
   let metrics = {};
   try {
-    // Use server-side Supabase client
-    const supabase = await createServerClient();
-    // Get session
-    const { data: { session } } = await supabase.auth.getSession();
-    const user = session?.user;
-    let retailerId = '';
-    if (user?.id) {
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('retailer_id')
-        .eq('id', user.id)
-        .maybeSingle();
-      retailerId = profile?.retailer_id || '';
+    // Use server-side Supabase client with SSR session
+    const supabase = createServerComponentClient({ cookies });
+    // Get authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      console.error('Auth error:', authError);
+      return (
+        <div className="flex items-center justify-center h-64 text-red-600">
+          Please log in to view dashboard metrics.
+        </div>
+      );
     }
 
-    // Prevent RPC call if retailerId is empty
-    if (!retailerId) {
-      console.error('No retailerId found for user', user?.id);
-      return <PulseClient initialMetrics={{}} />;
+    // Get retailer_id from user_profiles
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('retailer_id')
+      .eq('id', user.id)
+      .maybeSingle();
+    const retailerId = profile?.retailer_id || '';
+    if (profileError || !retailerId) {
+      console.error('No retailerId found for user', user?.id, profileError);
+      return (
+        <div className="flex items-center justify-center h-64 text-red-600">
+          No retailer associated with your account. Please contact support.
+        </div>
+      );
     }
 
     const { data, error } = await supabase.rpc('get_dashboard_metrics', {
@@ -42,6 +51,11 @@ export default async function PulsePage() {
     }
   } catch (error) {
     console.error('Error in PulsePage:', error);
+    return (
+      <div className="flex items-center justify-center h-64 text-red-600">
+        An unexpected error occurred. Please try again.
+      </div>
+    );
   }
   return <PulseClient initialMetrics={metrics} />;
 }
