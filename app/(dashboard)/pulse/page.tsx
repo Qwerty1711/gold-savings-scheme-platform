@@ -1,11 +1,13 @@
-// Debug log for environment variables
-console.log("SUPABASE URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
-console.log("SUPABASE ANON:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-console.log("SERVICE ROLE:", process.env.SUPABASE_SERVICE_ROLE_KEY);
-
+// app/(dashboard)/pulse/page.tsx
+import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { createServerClient as createSupabaseServerClient } from '@supabase/auth-helpers-nextjs';
 import { PulseClient } from './pulse-client';
+
+// Debug env logs
+console.log("SUPABASE URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
+console.log("SUPABASE ANON:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+console.log("SERVICE ROLE:", process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 export default async function PulsePage() {
   // Get current month date range
@@ -16,29 +18,31 @@ export default async function PulsePage() {
   let metrics = {};
 
   try {
-    // --- Fix: create server client properly ---
+    // --- Create server client ---
     const cookieStore = await cookies();
+
+    // DEV: log all cookies to debug Fast Refresh session loss
+    console.log('All cookies:', cookieStore.getAll());
+
     const supabase = createSupabaseServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
           get: (name) => cookieStore.get(name)?.value,
-          set: () => {}, // no-op for SSR
-          remove: () => {}, // no-op for SSR
+          set: () => {}, // no-op SSR
+          remove: () => {}, // no-op SSR
         },
       }
     );
 
     // Get authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    // If session missing, redirect to login
     if (authError || !user) {
-      console.error('Auth error:', authError);
-      return (
-        <div className="flex items-center justify-center h-64 text-red-600">
-          Please log in to view dashboard metrics.
-        </div>
-      );
+      console.warn('No active session. Redirecting to login.', authError);
+      redirect('/login');
     }
 
     // Get retailer_id from user_profiles
@@ -47,6 +51,7 @@ export default async function PulsePage() {
       .select('retailer_id')
       .eq('id', user.id)
       .maybeSingle();
+
     const retailerId = profile?.retailer_id || '';
     if (profileError || !retailerId) {
       console.error('No retailerId found for user', user?.id, profileError);
@@ -57,16 +62,19 @@ export default async function PulsePage() {
       );
     }
 
+    // Fetch dashboard metrics
     const { data, error } = await supabase.rpc('get_dashboard_metrics', {
       p_retailer_id: retailerId,
       p_start_date: startOfMonth.toISOString(),
       p_end_date: endOfMonth.toISOString(),
     });
+
     if (error) {
       console.error('Error fetching dashboard metrics:', error);
     } else {
       metrics = data || {};
     }
+
   } catch (error) {
     console.error('Error in PulsePage:', error);
     return (
