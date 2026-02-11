@@ -2,20 +2,35 @@ import { createServerClient as createSupabaseServerClient } from '@supabase/auth
 import { cookies } from 'next/headers';
 
 /**
- * CRITICAL: This creates a Supabase client for Server Components
+ * CRITICAL: Creates a Supabase client for Server Components
  * that properly handles user sessions and RLS policies.
- * 
- * The client uses cookies to maintain the user's session,
- * which is required for RLS policies to work correctly.
+ * Uses cookies to maintain the user's session.
  */
-// Debug log to verify env loading
-console.log('SUPABASE_URL:', process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL);
-console.log('SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+
+// Debug logs to verify environment variables
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+console.log('===== Supabase Environment Check =====');
+console.log('NEXT_PUBLIC_SUPABASE_URL:', supabaseUrl);
+console.log('NEXT_PUBLIC_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'Loaded ✅' : 'Undefined ❌');
+console.log('======================================');
+
+// Fail fast if env variables are missing
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    'Supabase environment variables are missing. Please check your .env.local:\n' +
+    'NEXT_PUBLIC_SUPABASE_URL\n' +
+    'NEXT_PUBLIC_SUPABASE_ANON_KEY'
+  );
+}
+
 export async function createServerClient() {
   const cookieStore = await cookies();
+
   return createSupabaseServerClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         get: (name) => cookieStore.get(name)?.value,
