@@ -3,7 +3,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import CustomersClient from './customers-client'
 
 export default async function CustomersPage() {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   try {
     const {

@@ -3,7 +3,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { PulseClient } from './pulse-client'
 
 export default async function PulsePage() {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   const now = new Date()
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
