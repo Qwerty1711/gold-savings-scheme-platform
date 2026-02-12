@@ -10,16 +10,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Email and password required' }, { status: 400 });
   }
 
-  // --- SSR cookies object ---
   const cookieStore = cookies();
 
+  // Supabase SSR client
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll: () => cookieStore.getAll().map(c => ({ name: c.name, value: c.value })),
-        setAll: (cookiesToSet) => {
+        // New SSR adapter for Next.js 13+
+        getAll: () =>
+          cookieStore.getAll().map(c => ({
+            name: c.name,
+            value: c.value,
+          })),
+        setAll: (cookiesToSet) =>
           cookiesToSet.forEach(c =>
             cookieStore.set(c.name, c.value, {
               httpOnly: true,
@@ -28,19 +33,19 @@ export async function POST(req: Request) {
               sameSite: 'lax',
               maxAge: c.maxAge,
             })
-          );
-        },
+          ),
       },
     }
   );
 
   try {
-    const { data, error } = await supabase.auth.admin.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
+
     const session = data.session;
     if (!session) throw new Error('No session returned');
 
-    // Manually set HTTP-only cookies
+    // Manual cookie set for SSR
     cookieStore.set('sb-access-token', session.access_token, {
       httpOnly: true,
       path: '/',
@@ -53,7 +58,7 @@ export async function POST(req: Request) {
       path: '/',
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 30, // 30 days
+      maxAge: 60 * 60 * 24 * 30,
     });
 
     return NextResponse.json({ user: data.user });
