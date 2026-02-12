@@ -13,28 +13,25 @@ export async function POST(req: Request) {
     );
   }
 
-  const cookieStore = cookies();
+  // ✅ IMPORTANT: await cookies() in Next 16
+  const cookieStore = await cookies();
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll: () =>
-          cookieStore.getAll().map((c) => ({
+        getAll() {
+          return cookieStore.getAll().map((c) => ({
             name: c.name,
             value: c.value,
-          })),
-        setAll: (cookiesToSet) =>
-          cookiesToSet.forEach((c) =>
-            cookieStore.set(c.name, c.value, {
-              httpOnly: true,
-              secure: process.env.NODE_ENV === 'production',
-              sameSite: 'lax',
-              path: '/',
-              maxAge: c.maxAge,
-            })
-          ),
+          }));
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        },
       },
     }
   );
