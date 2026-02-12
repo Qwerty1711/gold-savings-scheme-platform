@@ -1,160 +1,115 @@
-'use client';
+'use client'
 
-import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase/client';
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase/client'
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import {
-  TrendingUp,
-  Users,
-  UserCheck,
-  Coins,
-  Clock,
-  Edit,
-  ArrowRight,
-} from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+} from '@/components/ui/dialog'
 import {
   Select,
-  SelectTrigger,
   SelectContent,
   SelectItem,
+  SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { toast } from 'sonner';
+} from '@/components/ui/select'
 
-/* -------------------------------------------------------------------------- */
-/*                                   TYPES                                    */
-/* -------------------------------------------------------------------------- */
+/* =========================
+   Types
+========================= */
 
-type Karat = '18K' | '22K' | '24K' | 'SILVER';
+type Karat = '18K' | '22K' | '24K' | 'SILVER'
 
-const allowedKarats: readonly Karat[] = ['18K', '22K', '24K', 'SILVER'];
+const allowedKarats: readonly Karat[] = [
+  '18K',
+  '22K',
+  '24K',
+  'SILVER',
+]
 
 function isValidKarat(value: string): value is Karat {
-  return allowedKarats.includes(value as Karat);
+  return allowedKarats.includes(value as Karat)
 }
 
-type CurrentRate = {
-  // ...existing code...
-            const rate = metrics.currentRates[karat];
-            return (
-              <div key={karat} className="border rounded-xl p-4 space-y-2">
-                <Badge variant="outline">{karat}</Badge>
-                {rate ? (
-                  <>
-                    <div className="text-2xl font-bold">
-                      ₹{rate.rate_per_gram.toLocaleString()}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Updated:{' '}
-                      {new Date(rate.effective_from).toLocaleTimeString(
-                        'en-IN'
-                      )}
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Not set</p>
-                )}
-              </div>
-            );
-          })}
+interface PulseClientProps {
+  initialMetrics: any
+}
+
+/* =========================
+   Component
+========================= */
+
+export function PulseClient({ initialMetrics }: PulseClientProps) {
+  const router = useRouter()
+
+  const [metrics] = useState(initialMetrics || {})
+  const [updateRateDialog, setUpdateRateDialog] = useState(false)
+  const [newRate, setNewRate] = useState('')
+  const [selectedKarat, setSelectedKarat] = useState<Karat>('22K')
+  const [updating, setUpdating] = useState(false)
+
+  async function handleUpdateRate() {
+    if (!newRate) return
+
+    const parsed = Number(newRate)
+    if (!Number.isFinite(parsed) || parsed <= 0) return
+
+    try {
+      setUpdating(true)
+
+      const { error } = await supabase.from('gold_rates').insert({
+        karat: selectedKarat,
+        rate_per_gram: parsed,
+      })
+
+      if (error) throw error
+
+      setUpdateRateDialog(false)
+      setNewRate('')
+      router.refresh()
+    } catch (err) {
+      console.error('Rate update failed:', err)
+    } finally {
+      setUpdating(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Example Metrics Card */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-sm text-muted-foreground">
+            Pulse dashboard loaded successfully.
+          </div>
         </CardContent>
       </Card>
 
-      {/* Top Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card onClick={() => router.push('/payments')} className="cursor-pointer">
-          <CardHeader>
-            <CardTitle className="text-sm">Payments</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">
-              ₹{metrics.periodCollections.toLocaleString()}
-            </div>
-          </CardContent>
-        </Card>
+      <Button onClick={() => setUpdateRateDialog(true)}>
+        Update Gold Rate
+      </Button>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Gold Allocated</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">
-              {goldAllocatedPeriod.toFixed(4)} g
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Silver Allocated</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">
-              {metrics.silverAllocated.toFixed(4)} g
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Dues Outstanding</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">
-              ₹{metrics.duesOutstanding.toLocaleString()}
-            </div>
-            <p className="text-xs text-red-600">
-              Overdue: {metrics.overdueCount}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Update Rate Dialog */}
-      <Dialog
-        open={updateRateDialog}
-        onOpenChange={(open) => {
-          setUpdateRateDialog(open);
-          if (!open) {
-            setNewRate('');
-            setSelectedKarat('22K');
-          }
-        }}
-      >
+      <Dialog open={updateRateDialog} onOpenChange={setUpdateRateDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Update Metal Rate</DialogTitle>
-            <DialogDescription>
-              Set rate per gram
-            </DialogDescription>
+            <DialogTitle>Update Gold Rate</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
             <div>
-              <Label>Metal</Label>
+              <Label>Karat</Label>
               <Select
                 value={selectedKarat}
                 onValueChange={(v) => {
-                  if (isValidKarat(v)) setSelectedKarat(v);
+                  if (isValidKarat(v)) setSelectedKarat(v)
                 }}
               >
                 <SelectTrigger>
@@ -189,6 +144,7 @@ type CurrentRate = {
               >
                 Cancel
               </Button>
+
               <Button
                 className="flex-1"
                 onClick={handleUpdateRate}
@@ -201,5 +157,5 @@ type CurrentRate = {
         </DialogContent>
       </Dialog>
     </div>
-  );
+  )
 }
