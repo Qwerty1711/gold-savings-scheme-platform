@@ -132,43 +132,43 @@ export interface NavItem {
 export const navigationItems: NavItem[] = [
   {
     label: 'Pulse',
-    href: '/dashboard/pulse',
+    href: '/pulse',
     icon: 'Activity',
     roles: ['ADMIN', 'STAFF', 'CUSTOMER'],
   },
   {
     label: 'Collections',
-    href: '/dashboard/collections',
+    href: '/collections',
     icon: 'Coins',
     roles: ['ADMIN', 'STAFF', 'CUSTOMER'],
   },
   {
     label: 'Redemptions',
-    href: '/dashboard/redemptions',
+    href: '/redemptions',
     icon: 'Gift',
     roles: ['ADMIN', 'STAFF', 'CUSTOMER'],
   },
   {
     label: 'Dues',
-    href: '/dashboard/pulse', // Filter to show dues
+    href: '/pulse', // Filter to show dues
     icon: 'AlertCircle',
     roles: ['ADMIN', 'STAFF', 'CUSTOMER'],
   },
   {
     label: 'Customers',
-    href: '/dashboard/customers',
+    href: '/customers',
     icon: 'Users',
     roles: ['ADMIN', 'STAFF'],
   },
   {
     label: 'Plans',
-    href: '/dashboard/plans',
+    href: '/plans',
     icon: 'Package',
     roles: ['ADMIN', 'STAFF'],
   },
   {
     label: 'Growth',
-    href: '/dashboard/growth',
+    href: '/growth',
     icon: 'TrendingUp',
     roles: ['ADMIN'],
   },

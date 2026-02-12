@@ -25,9 +25,13 @@ export default function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Login failed');
-      router.push('/dashboard/pulse');
+
+      // ✅ Correct route
+      router.push('/pulse');
+      router.refresh();
     } catch (err: any) {
       setError(err.message || 'Login failed');
     } finally {
@@ -43,14 +47,27 @@ export default function LoginPage() {
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
+
         <div>
           <Label>Email</Label>
-          <Input type="email" required value={email} onChange={e => setEmail(e.target.value)} />
+          <Input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
         </div>
+
         <div>
           <Label>Password</Label>
-          <Input type="password" required value={password} onChange={e => setPassword(e.target.value)} />
+          <Input
+            type="password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
         </div>
+
         <Button type="submit" className="w-full" disabled={loading}>
           {loading ? 'Signing in…' : 'Sign In'}
         </Button>
