@@ -1,77 +1,106 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
+import { supabase } from '@/lib/supabase/client';
+
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { toast } from 'sonner';
 
 export default function LoginPage() {
   const router = useRouter();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
-  async function handleLogin(e: FormEvent) {
+  async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    setError('');
-    setLoading(true);
+    if (loading) return;
+
+    if (!email || !password) {
+      toast.error('Email and password are required');
+      return;
+    }
 
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+      setLoading(true);
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Login failed');
+      if (error) {
+        throw error;
+      }
 
-      // ✅ Correct route
-      router.push('/pulse');
-      router.refresh();
+      if (!data.session) {
+        throw new Error('Login failed. No session returned.');
+      }
+
+      toast.success('Login successful');
+
+      // Use replace to prevent back navigation to login
+      router.replace('/pulse');
     } catch (err: any) {
-      setError(err.message || 'Login failed');
+      console.error('Login error:', err);
+      toast.error(err?.message || 'Invalid credentials');
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <form onSubmit={handleLogin} className="space-y-4 w-full max-w-md">
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
+    <div className="flex min-h-screen items-center justify-center bg-muted/40 px-4">
+      <Card className="w-full max-w-md shadow-lg">
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold text-center">
+            Retailer Login
+          </CardTitle>
+        </CardHeader>
 
-        <div>
-          <Label>Email</Label>
-          <Input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </div>
+        <CardContent>
+          <form onSubmit={handleLogin} className="space-y-5">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
+              />
+            </div>
 
-        <div>
-          <Label>Password</Label>
-          <Input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
+              />
+            </div>
 
-        <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? 'Signing in…' : 'Sign In'}
-        </Button>
-      </form>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={loading}
+            >
+              {loading ? 'Signing in...' : 'Sign In'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

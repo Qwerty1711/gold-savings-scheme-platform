@@ -1,36 +1,60 @@
-// app/(dashboard)/pulse/page.tsx
-
-import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { createServerClient } from '@/lib/supabase/server'
+import { PulseClient } from './pulse-client'
 
 export default async function PulsePage() {
-  try {
-    const supabase = await createSupabaseServerClient()
+  const supabase = createServerClient()
 
+  const now = new Date()
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+  const endOfMonth = new Date(
+    now.getFullYear(),
+    now.getMonth() + 1,
+    0,
+    23,
+    59,
+    59,
+    999
+  )
+
+  try {
     const {
       data: { user },
-      error
+      error: authError,
     } = await supabase.auth.getUser()
 
-    if (error || !user) {
+    if (authError || !user) {
       redirect('/login')
     }
 
-    return (
-      <div className="min-h-screen p-6">
-        <h1 className="text-2xl font-bold">
-          Welcome to Pulse, {user.email}
-        </h1>
-      </div>
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('retailer_id, role, full_name')
+      .eq('id', user.id)
+      .single()
+
+    if (profileError || !profile?.retailer_id) {
+      console.error('Profile error:', profileError)
+      return <PulseClient initialMetrics={{}} />
+    }
+
+    const { data: metrics, error: metricsError } = await supabase.rpc(
+      'get_dashboard_metrics',
+      {
+        p_retailer_id: profile.retailer_id,
+        p_start_date: startOfMonth.toISOString(),
+        p_end_date: endOfMonth.toISOString(),
+      }
     )
-  } catch (err: any) {
-    console.error('Error in PulsePage:', err)
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-red-600">
-          Server Error: {err.message}
-        </p>
-      </div>
-    )
+
+    if (metricsError) {
+      console.error('RPC error:', metricsError)
+      return <PulseClient initialMetrics={{}} />
+    }
+
+    return <PulseClient initialMetrics={metrics || {}} />
+  } catch (error) {
+    console.error('Pulse unexpected error:', error)
+    return <PulseClient initialMetrics={{}} />
   }
 }
